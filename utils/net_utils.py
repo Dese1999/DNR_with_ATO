@@ -8,8 +8,7 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data.sampler import SubsetRandomSampler
-from imgnet_models.gate_function import custom_STE, virtual_gate
-from imgnet_models.mobilenetv3 import Hswish, Hsigmoid
+#from imgnet_models.mobilenetv3 import Hswish, Hsigmoid
 import torchvision
 from copy import deepcopy
 from layers import bn_type, conv_type, linear_type
@@ -17,9 +16,28 @@ import torch.backends.cudnn as cudnn
 from utils import hypernet
 
 import matplotlib.pyplot as plt
-from hypernet import HyperStructure
 from .hypernet import HyperStructure, custom_STE, virtual_gate
-
+def display_structure_hyper(vectors):
+    """
+    Display the sparsity of each layer's mask vector in DNR.
+    Returns a string with sparsity values for logging.
+    """
+    num_layers = len(vectors)
+    layer_sparsity = []
+    for i in range(num_layers):
+        current_parameter = vectors[i].cpu().data
+        if i == 0:
+            print(f"Layer 1 mask sample: {current_parameter[:5]}")
+        sparsity = current_parameter.sum().item() / current_parameter.size(0)
+        layer_sparsity.append(sparsity)
+    
+    print_string = ''
+    return_string = ''
+    for i in range(num_layers):
+        print_string += f'l-{i+1} s-{layer_sparsity[i]:.3f} '
+        return_string += f'{layer_sparsity[i]:.3f} '
+    print(print_string.strip())
+    return return_string.strip()
 # ATo Utility Functions
 DEFAULT_OPT_PARAMS = {
     "sgd": {"first_momentum": 0.0, "second_momentum": 0.0, "dampening": 0.0, "weight_decay": 0.0, "lmbda": 1e-3, "lmbda_amplify": 2, "hat_lmbda_coeff": 10},
