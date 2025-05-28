@@ -3,10 +3,11 @@ import numpy as np
 import pandas as pd
 import pathlib
 import sys
-
+import sys
+sys.path.append('/content/DNR_with_ATO')
 from copy import deepcopy
 from torch import nn
-from utils import net_utils, path_utils, display_structure_hyper, hypernet
+from utils import net_utils, path_utils, hypernet,plot_utils
 from utils.logging import AverageMeter, ProgressMeter
 from utils.eval_utils import accuracy
 from layers.CS_KD import KDLoss
@@ -17,11 +18,10 @@ from datasets import load_dataset
 from torch.utils.data import random_split
 import wandb
 import logging
-from plot_utils import plot_accuracy, plot_loss, plot_sparsity, plot_layer_sparsity, plot_mask_overlap  
-from hypernet import AC_layer
-from net_utils import reparameterize_non_sparse
+#from utils.plot_utils import plot_accuracy, plot_loss, plot_sparsity, plot_layer_sparsity, plot_mask_overlap  
+from utils.hypernet import AC_layer,HyperStructure
+from utils.net_utils import reparameterize_non_sparse,display_structure_hyper
 from trainers.default_cls import soft_train, validate, validate_mask
-from hypernet import HyperStructure
 from models.resnet_gate import (
     ResNet,
     resnet18,
