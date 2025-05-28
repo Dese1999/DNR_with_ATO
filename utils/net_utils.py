@@ -18,6 +18,7 @@ from utils import hypernet
 
 import matplotlib.pyplot as plt
 from hypernet import HyperStructure
+from .hypernet import HyperStructure, custom_STE, virtual_gate
 
 # ATo Utility Functions
 DEFAULT_OPT_PARAMS = {
