@@ -7,7 +7,7 @@ from utils.eval_utils import accuracy
 from utils.logging import AverageMeter, ProgressMeter
 import matplotlib.pyplot as plt
 # Import DNR-specific utilities
-from utils import display_structure, display_structure_hyper, one_hot, mixup_func, cross_entropy_onehot_target, LabelSmoothingLoss
+from utils.net_utils import display_structure, display_structure_hyper, one_hot, mixup_func, cross_entropy_onehot_target, LabelSmoothingLoss
 
 __all__ = ["soft_train_ato", "train_ato_no_mask", "validate_ato_mask", "validate_ato_no_mask", "one_step_hypernet_ato", "one_step_net_ato"]
 
