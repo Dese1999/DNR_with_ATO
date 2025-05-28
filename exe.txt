@@ -1,0 +1,108 @@
+1______________________________________________________________________________________
+python train.py \
+--arch resnet18 \
+--set CIFAR10 \
+--data ./data/cifar10 \
+--epochs 1 \
+--num-generations 1 \
+--batch-size 128 \
+--weight-decay 0.0001 \
+--save-model \
+--no-wandb \
+--hyper-t 0.5 \
+--hyper-base 2.0 \
+--model-name resnet \
+--block-string BasicBlock \
+--se-list "[False, False, False, False]" \
+--concrete-flag \
+--margin 0.1 \
+--use-ac-layer
+2______________________________________________________________________________________
+python train.py \
+--arch resnet50 \
+--set imagenet \
+--data ./data/imagenet \
+--epochs 1 \
+--num-generations 1 \
+--batch-size 128 \
+--weight-decay 0.0001 \
+--save-model \
+--no-wandb
+3______________________________________________________________________________________
+python train.py \
+--arch resnet18 \
+--set CIFAR10\
+--data ./data/imagenet \
+--epochs 1 \
+--num-generations 1 \
+--batch-size 128 \
+--weight-decay 0.0001 \
+--save-model \
+--no-wandb
+
+4______________________________________________________________________________________
+
+python train.py \
+--arch resnet18 \
+--set CIFAR10 \
+--data ./data/cifar10 \
+--epochs 1 \
+--num-generations 1 \
+--batch-size 128 \
+--weight-decay 0.0001 \
+--save-model \
+--no-wandb \
+--hyper-t 0.5 \
+--hyper-base 2.0
+5______________________________________________________________________________________
+# Modified Training Loop Snippet (Replacing Random Initialization)
+def train_dense_modified(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
+    # ... (Previous code remains the same until the training loop)
+
+    # Training loop
+    epoch_metrics = {'train_acc1': [], 'train_acc5': [], 'train_loss': [], 'test_acc1': [], 'test_acc5': [], 'test_loss': [], 'avg_sparsity': [], 'mask_update': []}
+    for epoch in range(cfg.epochs):
+        train_acc1, train_acc5, train_loss, cur_mask_vec = soft_train(
+            train_loader, model, hyper_net, criterion, val_loader_gate, optimizer, optimizer_hyper, epoch, cur_mask_vec, cfg
+        )
+        scheduler.step()
+        scheduler_hyper.step()
+
+        test_acc1, test_acc5, test_loss = validate(val_loader, model, criterion, cfg, epoch) if epoch == 0 or (epoch + 1) % 10 == 0 else (0, 0, 0)
+        if epoch >= cfg.start_epoch_hyper:
+            test_acc1, test_acc5, test_loss = validate_mask(val_loader, model, criterion, cfg, epoch, cur_mask_vec)
+
+        with torch.no_grad():
+            hyper_net.eval()
+            sparsity_str = display_structure_hyper(cur_mask_vec)
+            sparsity_values = [float(s) for s in sparsity_str.split() if s.replace('.', '').isdigit()]
+            avg_sparsity = sum(sparsity_values) / len(sparsity_values) if sparsity_values else 0
+
+        epoch_metrics['train_acc1'].append(train_acc1)
+        epoch_metrics['train_acc5'].append(train_acc5)
+        epoch_metrics['train_loss'].append(train_loss)
+        epoch_metrics['test_acc1'].append(test_acc1)
+        epoch_metrics['test_acc5'].append(test_acc5)
+        epoch_metrics['test_loss'].append(test_loss)
+        epoch_metrics['avg_sparsity'].append(avg_sparsity)
+        epoch_metrics['mask_update'].append((epoch + 1) % cfg.hyper_step == 0)
+
+        if epoch == cfg.epochs - 1:
+            with torch.no_grad():
+                masks = hyper_net.vector2mask(cur_mask_vec)
+                model = reparameterize_non_sparse(cfg, model, masks)  # Use reparameterize_non_sparse instead of random init
+
+    if cfg.save_model:
+        save_checkpoint({
+            'epoch': cfg.epochs,
+            'arch': cfg.arch,
+            'state_dict': model.state_dict(),
+            'best_acc1': max(epoch_metrics['test_acc1']),
+            'optimizer': optimizer.state_dict(),
+            'hyper_net': hyper_net.state_dict(),
+            'generation': generation
+        }, cfg, epochs=cfg.epochs)
+
+    return model, hyper_net, cur_mask_vec, epoch_metrics
+
+# Additional ATo Functions (e.g., Flops_constraint_resnet, Channel_constraint, etc.) can be added here as needed
