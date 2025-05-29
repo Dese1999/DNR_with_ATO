@@ -200,7 +200,7 @@ class TrainTransform_other(object):
     def __call__(self, sample):
         x1 = self.transform(sample)
         x2 = self.transform_prime(sample)
-        return x1, x2
+        return x1
 
 
 class TrainTransform_cifar(object):
@@ -266,4 +266,4 @@ class TrainTransform_cifar(object):
         # x0 = self.weak_transform(sample)
         x1 = self.transform(sample)
         x2 = self.transform_prime(sample)
-        return x1, x2
+        return x1
