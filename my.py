@@ -96,6 +96,7 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
 
     if hyper_net is None:
         width, structure = model.count_structure()
+        print(f"Structure from count_structure: {structure}")  # خط دیباگ
         hyper_net = HyperStructure(structure=structure, T=cfg.hyper_t, base=cfg.hyper_base, args=cfg)
         hyper_net = hyper_net.cuda()
 
