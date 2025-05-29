@@ -242,10 +242,13 @@ class AC_layer(nn.Module):
         self.num_class = num_class
 
     def forward(self, input):
-        b_size, n_c, w, h = input.size()
-        input = input.view(b_size, 1, -1)
-        input = F.adaptive_avg_pool1d(input, self.num_class)
-        out = self.fc(input.squeeze())
+        if len(input.size()) == 2:
+            out = self.fc(input)
+        else:
+            b_size, n_c, w, h = input.size()
+            input = input.view(b_size, 1, -1)
+            input = F.adaptive_avg_pool1d(input, self.num_class)
+            out = self.fc(input.squeeze())
         return out
 
 def prob_round_torch(x):
