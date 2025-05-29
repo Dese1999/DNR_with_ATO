@@ -48,7 +48,7 @@ class BasicBlock(nn.Module):
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = norm_layer(planes)
         self.relu = nn.ReLU(inplace=True)
-        if num_gate == 1:
+        if num_gate > 0:
             self.gate = virtual_gate(planes)
         else:
             self.gate = None
@@ -258,12 +258,15 @@ class ResNet(nn.Module):
         x = torch.flatten(x, 1)
         x = self.fc(x)
         return x
-
+        
     def count_structure(self):
         structure = []
         for m in self.modules():
             if isinstance(m, virtual_gate):
                 structure.append(m.width)
+                print(f"Found virtual_gate with width: {m.width}")  # خط دیباگ
+        if not structure:
+            raise ValueError("No virtual_gate layers found in the model. Check the model architecture or ensure virtual_gate layers are added.")
         self.structure = structure
         return sum(structure), structure
 
