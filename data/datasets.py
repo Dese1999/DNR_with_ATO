@@ -15,7 +15,12 @@ from utils import augmentations as aug
 from data.Dataloader_analysis.cifar10_noisy import CIFAR10ImbalancedNoisy
 from data.Dataloader_analysis.cifar100_noisy import CIFAR100ImbalancedNoisy
 # from data.Dataloader_analysis.tiny_imgenet_noisy import TinyImageNet_noisy
-
+import torch
+from torch.utils.data import DataLoader, BatchSampler, RandomSampler, SequentialSampler
+from torchvision import transforms, datasets
+import augmentations as aug  
+from .dataset_wrappers import DatasetWrapper, PairBatchSampler  
+###
 from configs.base_config import Config
 
 cfg = Config().parse(None)
@@ -166,7 +171,12 @@ class ConcatWrapper(Dataset): # TODO: Naming
         warnings.warn("cummulative_sizes attribute is renamed to "
                       "cumulative_sizes", DeprecationWarning, stacklevel=2)
         return self.cumulative_sizes
-        
+#  collate_fn 
+def collate_fn(batch):
+    images = [item[0] for item in batch]  # extract images
+    targets = torch.tensor([item[1] for item in batch], dtype=torch.long)  # extract labels 
+    images = torch.stack(images, dim=0)  # Converting a list of images to a tensor
+    return images, targets        
 def load_dataset(name, root, sample='default', **kwargs):
     # Dataset
     if name in ['imagenet', 'tinyImagenet_full', 'tinyImagenet_val', 'CUB200', 'STANFORD120', 'MIT67', 'Aircrafts', 'Dog120', 'Flower102', 'CUB200_val', 'Dog120_val', 'MIT67_val']:
@@ -234,13 +244,6 @@ def load_dataset(name, root, sample='default', **kwargs):
     else:
         raise Exception('Unknown dataset: {}'.format(name))
 
-    #  collate_fn 
-    def collate_fn(batch):
-        images = [item[0] for item in batch]  # extract images
-        targets = torch.tensor([item[1] for item in batch], dtype=torch.long)  # extract labels 
-        images = torch.stack(images, dim=0)  # Converting a list of images to a tensor
-        return images, targets
-
     # Sampler
     if sample == 'default':
         get_train_sampler = lambda d: BatchSampler(RandomSampler(d), kwargs['batch_size'], False)
@@ -251,10 +254,10 @@ def load_dataset(name, root, sample='default', **kwargs):
     else:
         raise Exception('Unknown sampling: {}'.format(sample))
 
-    # اضافه کردن collate_fn به DataLoader
+    # Add collate_fn to DataLoader
     trainloader = DataLoader(trainset, batch_sampler=get_train_sampler(trainset), num_workers=10, pin_memory=True, collate_fn=collate_fn)
     valloader = DataLoader(valset, batch_sampler=get_test_sampler(valset), num_workers=10, pin_memory=True, collate_fn=collate_fn)
-
+    
     epoch_size = len(trainset)
     trainloader.num_batches = math.ceil(epoch_size / kwargs['batch_size'])
     trainloader.num_files = epoch_size    
