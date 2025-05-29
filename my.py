@@ -7,14 +7,14 @@ import sys
 sys.path.append('/content/DNR_with_ATO')
 from copy import deepcopy
 from torch import nn
-from utils import net_utils, path_utils, hypernet,plot_utils
+from utils import net_utils, path_utils, hypernet#,plot_utils
 from utils.logging import AverageMeter, ProgressMeter
 from utils.eval_utils import accuracy
 from layers.CS_KD import KDLoss
 from configs.base_config import Config
 import importlib
 from torchvision import transforms, datasets
-from datasets import load_dataset  
+#from datasets import load_dataset  
 from torch.utils.data import random_split
 import wandb
 import logging
@@ -22,6 +22,7 @@ import logging
 from utils.hypernet import AC_layer,HyperStructure
 from utils.net_utils import reparameterize_non_sparse,display_structure_hyper
 from trainers.default_cls import soft_train, validate, validate_mask
+from data.datasets import load_dataset  
 from models.resnet_gate import (
     ResNet,
     resnet18,
@@ -117,8 +118,9 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
     base_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, int((cfg.epochs - 5) / 2))
     scheduler = net_utils.GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=5, after_scheduler=base_scheduler)
 
-    train_loader, val_loader = load_dataset(name=cfg.set, root=cfg.data, sample='default', batch_size=cfg.batch_size)
-
+    import inspect
+    print(f"cfg.data: {cfg.data}")
+    train_loader, val_loader = load_dataset(name=cfg.set, root=cfg.data, path=cfg.data, sample='default', batch_size=cfg.batch_size)
     # Create validation subset for HyperNet
     ratio = (len(train_loader.dataset) / cfg.hyper_step) / len(train_loader.dataset)
     _, val_gate_dataset = random_split(train_loader.dataset, [len(train_loader.dataset) - int(ratio * len(train_loader.dataset)), int(ratio * len(train_loader.dataset))])
