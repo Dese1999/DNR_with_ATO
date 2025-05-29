@@ -1,9 +1,9 @@
 1______________________________________________________________________________________
-python train.py \
+!python DNR_with_ATO/my.py \
 --arch resnet18 \
 --set CIFAR10 \
 --data ./data/cifar10 \
---epochs 1 \
+--epochs 10 \
 --num-generations 1 \
 --batch-size 128 \
 --weight-decay 0.0001 \
