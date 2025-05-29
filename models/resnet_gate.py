@@ -217,40 +217,40 @@ class ResNet(nn.Module):
                     nn.init.constant_(m.bn2.weight, 0)
 
     def _make_layer(self, block, planes, blocks, stride=1, dilate=False, cfg=None):
-    norm_layer = self._norm_layer
-    downsample = None
-    previous_dilation = self.dilation
-
-    if dilate:
-        self.dilation *= stride
-        stride = 1
-    if stride != 1 or self.inplanes != planes * block.expansion:
-        downsample = nn.Sequential(
-            conv1x1(self.inplanes, planes * block.expansion, stride),
-            norm_layer(planes * block.expansion),
-        )
-    if cfg is None:
-        layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, self.groups,
-                            self.base_width, previous_dilation, norm_layer, num_gate=self.num_gate))
-        self.inplanes = planes * block.expansion
-        for _ in range(1, blocks):
-            layers.append(block(self.inplanes, planes, groups=self.groups,
-                                base_width=self.base_width, dilation=self.dilation,
-                                norm_layer=norm_layer, num_gate=self.num_gate))
-    else:
-        index = 0
-        layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, self.groups,
-                            self.base_width, previous_dilation, norm_layer, cfg=cfg[int(self.factor*index):int(self.factor*index+self.factor)], num_gate=self.num_gate))
-        index += 1
-        self.inplanes = planes * block.expansion
-        for _ in range(1, blocks):
-            layers.append(block(self.inplanes, planes, groups=self.groups,
-                                base_width=self.base_width, dilation=self.dilation,
-                                norm_layer=norm_layer, cfg=cfg[int(self.factor*index):int(self.factor*index+self.factor)], num_gate=self.num_gate))
+        norm_layer = self._norm_layer
+        downsample = None
+        previous_dilation = self.dilation
+    
+        if dilate:
+            self.dilation *= stride
+            stride = 1
+        if stride != 1 or self.inplanes != planes * block.expansion:
+            downsample = nn.Sequential(
+                conv1x1(self.inplanes, planes * block.expansion, stride),
+                norm_layer(planes * block.expansion),
+            )
+        if cfg is None:
+            layers = []
+            layers.append(block(self.inplanes, planes, stride, downsample, self.groups,
+                                self.base_width, previous_dilation, norm_layer, num_gate=self.num_gate))
+            self.inplanes = planes * block.expansion
+            for _ in range(1, blocks):
+                layers.append(block(self.inplanes, planes, groups=self.groups,
+                                    base_width=self.base_width, dilation=self.dilation,
+                                    norm_layer=norm_layer, num_gate=self.num_gate))
+        else:
+            index = 0
+            layers = []
+            layers.append(block(self.inplanes, planes, stride, downsample, self.groups,
+                                self.base_width, previous_dilation, norm_layer, cfg=cfg[int(self.factor*index):int(self.factor*index+self.factor)], num_gate=self.num_gate))
             index += 1
-    return MaskedSequential(*layers)
+            self.inplanes = planes * block.expansion
+            for _ in range(1, blocks):
+                layers.append(block(self.inplanes, planes, groups=self.groups,
+                                    base_width=self.base_width, dilation=self.dilation,
+                                    norm_layer=norm_layer, cfg=cfg[int(self.factor*index):int(self.factor*index+self.factor)], num_gate=self.num_gate))
+                index += 1
+        return MaskedSequential(*layers)
 
     def forward(self, x, cur_mask_vec=None):
         x = self.conv1(x)
