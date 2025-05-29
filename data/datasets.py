@@ -166,9 +166,10 @@ class ConcatWrapper(Dataset): # TODO: Naming
         warnings.warn("cummulative_sizes attribute is renamed to "
                       "cumulative_sizes", DeprecationWarning, stacklevel=2)
         return self.cumulative_sizes
+        
 def load_dataset(name, root, sample='default', **kwargs):
     # Dataset
-    if name in ['imagenet', 'tinyImagenet_full', 'tinyImagenet_val', 'CUB200', 'STANFORD120', 'MIT67', 'Aircrafts', 'Dog120', 'Flower102','CUB200_val', 'Dog120_val', 'MIT67_val']:
+    if name in ['imagenet', 'tinyImagenet_full', 'tinyImagenet_val', 'CUB200', 'STANFORD120', 'MIT67', 'Aircrafts', 'Dog120', 'Flower102', 'CUB200_val', 'Dog120_val', 'MIT67_val']:
         # TODO
         if name in ['tinyImagenet_full', 'tinyImagenet_val']:
             transform_train = aug.TrainTransform_tinyimagenet()
@@ -177,14 +178,11 @@ def load_dataset(name, root, sample='default', **kwargs):
                 transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
             ])
 
-
             train_val_dataset_dir = os.path.join(root, name, "train")
             test_dataset_dir = os.path.join(root, name, "test")
 
-
             trainset = DatasetWrapper(datasets.ImageFolder(root=train_val_dataset_dir, transform=transform_train))
-            valset   = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
-
+            valset = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
 
         elif name == 'imagenet':
             transform_train = aug.TrainTransform_imagenet()
@@ -197,10 +195,8 @@ def load_dataset(name, root, sample='default', **kwargs):
             train_val_dataset_dir = os.path.join(root, "train")
             test_dataset_dir = os.path.join(root, "val")
 
-
             trainset = DatasetWrapper(datasets.ImageFolder(root=train_val_dataset_dir, transform=transform_train))
-            valset   = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
-
+            valset = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
 
         else:
             transform_train = aug.TrainTransform_other()
@@ -211,21 +207,17 @@ def load_dataset(name, root, sample='default', **kwargs):
                 transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
             ])
 
-
             train_val_dataset_dir = os.path.join(root, name, "train")
             trainset = DatasetWrapper(datasets.ImageFolder(root=train_val_dataset_dir, transform=transform_train))
             
             if name in ['Aircrafts', 'Flower102']:
                 val_dataset_dir = os.path.join(root, name, "val")
                 test_dataset_dir = os.path.join(root, name, "test")
-                valset   = DatasetWrapper(datasets.ImageFolder(root=val_dataset_dir, transform=transform_test))
-                testset   = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
-
-
+                valset = DatasetWrapper(datasets.ImageFolder(root=val_dataset_dir, transform=transform_test))
+                testset = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
             else:
                 test_dataset_dir = os.path.join(root, name, "test")
-                valset   = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
-
+                valset = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
 
     elif name in ['CIFAR10', 'CIFAR10val', 'CIFAR100', 'CIFAR100val']:
         transform_train = aug.TrainTransform_cifar()
@@ -239,33 +231,29 @@ def load_dataset(name, root, sample='default', **kwargs):
         else:  # CIFAR100
             trainset = DatasetWrapper(datasets.CIFAR100(root=root, train=True, download=True, transform=transform_train))
             valset = DatasetWrapper(datasets.CIFAR100(root=root, train=False, download=True, transform=transform_test))
-        # خطوط زیر حذف شدند چون غیرضروری هستند و باعث خطا می‌شوند:
-        # train_val_dataset_dir = os.path.join(root, "train")
-        # trainset = DatasetWrapper(datasets.ImageFolder(root=train_val_dataset_dir, transform=transform_train))
-        # test_dataset_dir = os.path.join(root, "test")
-        # valset = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
     else:
         raise Exception('Unknown dataset: {}'.format(name))
 
+    #  collate_fn 
+    def collate_fn(batch):
+        images = [item[0] for item in batch]  # extract images
+        targets = torch.tensor([item[1] for item in batch], dtype=torch.long)  # extract labels 
+        images = torch.stack(images, dim=0)  # Converting a list of images to a tensor
+        return images, targets
 
     # Sampler
     if sample == 'default':
         get_train_sampler = lambda d: BatchSampler(RandomSampler(d), kwargs['batch_size'], False)
-        get_test_sampler  = lambda d: BatchSampler(SequentialSampler(d), kwargs['batch_size'], False)
-
-
+        get_test_sampler = lambda d: BatchSampler(SequentialSampler(d), kwargs['batch_size'], False)
     elif sample == 'pair':
         get_train_sampler = lambda d: PairBatchSampler(d, kwargs['batch_size'])
-        get_test_sampler  = lambda d: BatchSampler(SequentialSampler(d), kwargs['batch_size'], False)
-
-
+        get_test_sampler = lambda d: BatchSampler(SequentialSampler(d), kwargs['batch_size'], False)
     else:
         raise Exception('Unknown sampling: {}'.format(sample))
 
-
-    trainloader = DataLoader(trainset, batch_sampler=get_train_sampler(trainset), num_workers=10, pin_memory=True)
-    valloader   = DataLoader(valset,   batch_sampler=get_test_sampler(valset), num_workers=10, pin_memory=True)
-
+    # اضافه کردن collate_fn به DataLoader
+    trainloader = DataLoader(trainset, batch_sampler=get_train_sampler(trainset), num_workers=10, pin_memory=True, collate_fn=collate_fn)
+    valloader = DataLoader(valset, batch_sampler=get_test_sampler(valset), num_workers=10, pin_memory=True, collate_fn=collate_fn)
 
     epoch_size = len(trainset)
     trainloader.num_batches = math.ceil(epoch_size / kwargs['batch_size'])
@@ -276,14 +264,13 @@ def load_dataset(name, root, sample='default', **kwargs):
     valloader.num_files = epoch_size        
     
     if name in ['Aircrafts', 'Flower102']:
-        testloader   = DataLoader(testset,   batch_sampler=get_test_sampler(testset), num_workers=10, pin_memory=True)
+        testloader = DataLoader(testset, batch_sampler=get_test_sampler(testset), num_workers=10, pin_memory=True, collate_fn=collate_fn)
         epoch_size = len(testset)
         testloader.num_batches = math.ceil(epoch_size / kwargs['batch_size'])
         testloader.num_files = epoch_size   
         return trainloader, valloader, testloader
     else:
         return trainloader, valloader
-
 
 def load_dataset_linear_eval(name, root, sample='default', **kwargs):
     # Dataset
