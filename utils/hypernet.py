@@ -48,7 +48,10 @@ class custom_STE(torch.autograd.Function):
 class HyperStructure(nn.Module):
     def __init__(self, structure=None, T=0.4, base=3.0, args=None, training_mode=True):
         super(HyperStructure, self).__init__()
-        self.bn1 = nn.LayerNorm([128 * 2])  # تطبیق با خروجی دوطرفه GRU
+        if not structure or len(structure) == 0:
+            raise ValueError("The 'structure' argument must be a non-empty list. Received: {}".format(structure))
+            
+        self.bn1 = nn.LayerNorm([128 * 2])  
         self.T = T
         self.structure = structure
         self.Bi_GRU = nn.GRU(64, 128, bidirectional=True)
@@ -63,7 +66,7 @@ class HyperStructure(nn.Module):
         self.se_list = getattr(args, 'se_list', [False] * len(structure))
         self.training_mode = training_mode
 
-        # اعتبارسنجی
+        # validation
         if self.model_name not in ['resnet', 'mobnetv2', 'mobnetv3']:
             raise ValueError(f"Unsupported model_name: {self.model_name}")
         if self.block_string not in ['BasicBlock', 'Bottleneck'] and self.model_name == 'resnet':
