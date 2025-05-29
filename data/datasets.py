@@ -53,7 +53,7 @@ class PairBatchSampler(Sampler):
 
 
 class DatasetWrapper(Dataset):
-    # Additinoal attributes
+    # Additional attributes
     # - indices
     # - classwise_indices
     # - num_classes
@@ -66,21 +66,20 @@ class DatasetWrapper(Dataset):
         else:
             self.indices = indices
 
-        # torchvision 0.2.0 compatibility
-        if torchvision.__version__.startswith('0.2'):
-            if isinstance(self.base_dataset, datasets.ImageFolder):
-                self.base_dataset.targets = [s[1] for s in self.base_dataset.imgs]
-            else:
-                if self.base_dataset.train:
-                    self.base_dataset.targets = self.base_dataset.train_labels
-                else:
-                    self.base_dataset.targets = self.base_dataset.test_labels
+        if hasattr(self.base_dataset, 'targets'):
+            self.base_dataset.targets = self.base_dataset.targets  # استفاده از targets موجود
+        elif hasattr(self.base_dataset, 'train_labels') and self.base_dataset.train:
+            self.base_dataset.targets = self.base_dataset.train_labels  # برای نسخه‌های قدیمی
+        elif hasattr(self.base_dataset, 'test_labels') and not self.base_dataset.train:
+            self.base_dataset.targets = self.base_dataset.test_labels  # برای نسخه‌های قدیمی
+        else:
+            raise AttributeError("Dataset does not have accessible targets or labels.")
 
         self.classwise_indices = defaultdict(list)
         for i in range(len(self)):
             y = self.base_dataset.targets[self.indices[i]]
             self.classwise_indices[y].append(i)
-        self.num_classes = max(self.classwise_indices.keys())+1        
+        self.num_classes = max(self.classwise_indices.keys()) + 1        
 
     def __getitem__(self, i):
         return self.base_dataset[self.indices[i]]
@@ -90,7 +89,6 @@ class DatasetWrapper(Dataset):
 
     def get_class(self, i):
         return self.base_dataset.targets[self.indices[i]]
-
 
 class ConcatWrapper(Dataset): # TODO: Naming
     @staticmethod
