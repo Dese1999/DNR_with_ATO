@@ -131,9 +131,8 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
         train_acc1, train_acc5, train_loss, cur_mask_vec = soft_train(
             train_loader, model, hyper_net, criterion, val_loader_gate, 
             optimizer, optimizer_hyper, epoch, cur_mask_vec, cfg, 
-            scheduler=scheduler, scheduler_hyper=scheduler_hyper  # پاس دادن schedulerها
+            scheduler=scheduler, scheduler_hyper=scheduler_hyper  
         )
-        # scheduler.step() و scheduler_hyper.step() حذف شدند چون در soft_train اجرا می‌شوند
 
         test_acc1, test_acc5, test_loss = validate(val_loader, model, criterion, cfg, epoch) if epoch == 0 or (epoch + 1) % 10 == 0 else (0, 0, 0)
         if epoch >= cfg.start_epoch_hyper:
