@@ -166,43 +166,28 @@ class ConcatWrapper(Dataset): # TODO: Naming
         warnings.warn("cummulative_sizes attribute is renamed to "
                       "cumulative_sizes", DeprecationWarning, stacklevel=2)
         return self.cumulative_sizes
-
-
-
 def load_dataset(name, root, sample='default', **kwargs):
     # Dataset
     if name in ['imagenet', 'tinyImagenet_full', 'tinyImagenet_val', 'CUB200', 'STANFORD120', 'MIT67', 'Aircrafts', 'Dog120', 'Flower102','CUB200_val', 'Dog120_val', 'MIT67_val']:
         # TODO
         if name in ['tinyImagenet_full', 'tinyImagenet_val']:
-
             transform_train = aug.TrainTransform_tinyimagenet()
-            # transform_train = transforms.Compose([
-            #     transforms.RandomCrop(64, padding=4),
-            #     transforms.RandomHorizontalFlip(),
-            #     transforms.ToTensor(),
-            #     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-            # ])
             transform_test = transforms.Compose([
-                # transforms.Resize(32),
                 transforms.ToTensor(),
                 transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
             ])
 
+
             train_val_dataset_dir = os.path.join(root, name, "train")
-            # print(train_val_dataset_dir)
             test_dataset_dir = os.path.join(root, name, "test")
+
 
             trainset = DatasetWrapper(datasets.ImageFolder(root=train_val_dataset_dir, transform=transform_train))
             valset   = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
 
+
         elif name == 'imagenet':
             transform_train = aug.TrainTransform_imagenet()
-            # transform_train = transforms.Compose([
-            #     transforms.RandomResizedCrop(224),
-            #     transforms.RandomHorizontalFlip(),
-            #     transforms.ToTensor(),
-            #     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-            # ])
             transform_test = transforms.Compose([
                 transforms.Resize(256),
                 transforms.CenterCrop(224),
@@ -212,24 +197,20 @@ def load_dataset(name, root, sample='default', **kwargs):
             train_val_dataset_dir = os.path.join(root, "train")
             test_dataset_dir = os.path.join(root, "val")
 
+
             trainset = DatasetWrapper(datasets.ImageFolder(root=train_val_dataset_dir, transform=transform_train))
             valset   = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
 
+
         else:
             transform_train = aug.TrainTransform_other()
-            # transform_train = transforms.Compose([
-            #     transforms.Resize((256, 256)),
-            #     transforms.RandomResizedCrop(224),
-            #     transforms.RandomHorizontalFlip(),
-            #     transforms.ToTensor(),
-            #     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-            # ])
             transform_test = transforms.Compose([
                 transforms.Resize((256, 256)),
                 transforms.CenterCrop(224),
                 transforms.ToTensor(),
                 transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
             ])
+
 
             train_val_dataset_dir = os.path.join(root, name, "train")
             trainset = DatasetWrapper(datasets.ImageFolder(root=train_val_dataset_dir, transform=transform_train))
@@ -240,18 +221,13 @@ def load_dataset(name, root, sample='default', **kwargs):
                 valset   = DatasetWrapper(datasets.ImageFolder(root=val_dataset_dir, transform=transform_test))
                 testset   = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
 
+
             else:
                 test_dataset_dir = os.path.join(root, name, "test")
                 valset   = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
 
+
     elif name in ['CIFAR10', 'CIFAR10val', 'CIFAR100', 'CIFAR100val']:
-        # transform_train = transforms.Compose([
-        #     transforms.RandomCrop(32, padding=4),
-        #     transforms.RandomHorizontalFlip(),
-        #     transforms.ToTensor(),
-        #     transforms.Normalize((0.4914, 0.4822, 0.4465),
-        #                          (0.2023, 0.1994, 0.2010)),
-        # ])
         transform_train = aug.TrainTransform_cifar()
         transform_test = transforms.Compose([
             transforms.ToTensor(),
@@ -260,35 +236,36 @@ def load_dataset(name, root, sample='default', **kwargs):
         if name in ['CIFAR10', 'CIFAR10val']:
             trainset = DatasetWrapper(datasets.CIFAR10(root=root, train=True, download=True, transform=transform_train))
             valset = DatasetWrapper(datasets.CIFAR10(root=root, train=False, download=True, transform=transform_test))
-        # if name == 'cifar10':
-        #     CIFAR = datasets.CIFAR10
-        # else:
-        #     CIFAR = datasets.CIFAR100
-
-        # trainset = DatasetWrapper(CIFAR(root, train=True,  download=True, transform=transform_train))
-        # valset   = DatasetWrapper(CIFAR(root, train=False, download=True, transform=transform_test))
-
-        train_val_dataset_dir = os.path.join(root, name, "train")
-        trainset = DatasetWrapper(datasets.ImageFolder(root=train_val_dataset_dir, transform=transform_train))
-        test_dataset_dir = os.path.join(root, name, "test")
-        valset   = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
+        else:  # CIFAR100
+            trainset = DatasetWrapper(datasets.CIFAR100(root=root, train=True, download=True, transform=transform_train))
+            valset = DatasetWrapper(datasets.CIFAR100(root=root, train=False, download=True, transform=transform_test))
+        # خطوط زیر حذف شدند چون غیرضروری هستند و باعث خطا می‌شوند:
+        # train_val_dataset_dir = os.path.join(root, "train")
+        # trainset = DatasetWrapper(datasets.ImageFolder(root=train_val_dataset_dir, transform=transform_train))
+        # test_dataset_dir = os.path.join(root, "test")
+        # valset = DatasetWrapper(datasets.ImageFolder(root=test_dataset_dir, transform=transform_test))
     else:
         raise Exception('Unknown dataset: {}'.format(name))
+
 
     # Sampler
     if sample == 'default':
         get_train_sampler = lambda d: BatchSampler(RandomSampler(d), kwargs['batch_size'], False)
         get_test_sampler  = lambda d: BatchSampler(SequentialSampler(d), kwargs['batch_size'], False)
 
+
     elif sample == 'pair':
         get_train_sampler = lambda d: PairBatchSampler(d, kwargs['batch_size'])
         get_test_sampler  = lambda d: BatchSampler(SequentialSampler(d), kwargs['batch_size'], False)
 
+
     else:
-        raise Exception('Unknown sampling: {}'.format(sampling))
+        raise Exception('Unknown sampling: {}'.format(sample))
+
 
     trainloader = DataLoader(trainset, batch_sampler=get_train_sampler(trainset), num_workers=10, pin_memory=True)
     valloader   = DataLoader(valset,   batch_sampler=get_test_sampler(valset), num_workers=10, pin_memory=True)
+
 
     epoch_size = len(trainset)
     trainloader.num_batches = math.ceil(epoch_size / kwargs['batch_size'])
