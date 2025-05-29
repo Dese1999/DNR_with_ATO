@@ -258,7 +258,9 @@ def load_dataset(name, root, sample='default', **kwargs):
             transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
         ])
-
+        if name in ['CIFAR10', 'CIFAR10val']:
+            trainset = DatasetWrapper(datasets.CIFAR10(root=root, train=True, download=True, transform=transform_train))
+            valset = DatasetWrapper(datasets.CIFAR10(root=root, train=False, download=True, transform=transform_test))
         # if name == 'cifar10':
         #     CIFAR = datasets.CIFAR10
         # else:
