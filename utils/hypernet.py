@@ -236,19 +236,23 @@ class virtual_gate(nn.Module):
         pass  # No need to reset in DNR
 
 class AC_layer(nn.Module):
-    def __init__(self, num_class=10):
+    def __init__(self, in_features, num_class=10):
         super(AC_layer, self).__init__()
-        self.fc = nn.Linear(num_class, num_class)
         self.num_class = num_class
+        self.fc_adapt = nn.Linear(in_features, num_class)  # 
+        self.fc = nn.Linear(num_class, num_class)
 
     def forward(self, input):
         if len(input.size()) == 2:
+            input = self.fc_adapt(input)  #num_class
             out = self.fc(input)
         else:
             b_size, n_c, w, h = input.size()
             input = input.view(b_size, 1, -1)
             input = F.adaptive_avg_pool1d(input, self.num_class)
-            out = self.fc(input.squeeze())
+            input = input.squeeze()
+            input = self.fc_adapt(input)  # 
+            out = self.fc(input)
         return out
 
 def prob_round_torch(x):
