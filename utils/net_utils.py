@@ -9,7 +9,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data.sampler import SubsetRandomSampler
 import torchvision
+from . import hypernet  #  
 from .hypernet import HyperStructure, custom_STE, virtual_gate
+from torch.optim.lr_scheduler import _LRScheduler, ReduceLROnPlateau
+from packaging import version
 
 # ATO and DNR Utility Functions
 
@@ -50,52 +53,93 @@ def display_structure_hyper(vectors):
         return_string += f'{layer_sparsity[i]:.3f} '
     print(print_string.strip())
     return return_string.strip()
-
 def group_weight(module, weight_norm=True):
     """Group model parameters for optimization in DNR framework."""
     group_decay = []
     group_no_decay = []
+    grouped_params = set()  # 
 
     if hasattr(module, 'inputs'):
         group_no_decay.append(module.inputs)
+        grouped_params.add(id(module.inputs))
 
     for m in module.modules():
         if isinstance(m, (nn.Linear, nn.Conv2d)):
-            group_decay.append(m.weight)
-            if m.bias is not None:
+            if id(m.weight) not in grouped_params:
+                group_decay.append(m.weight)
+                grouped_params.add(id(m.weight))
+            if m.bias is not None and id(m.bias) not in grouped_params:
                 group_no_decay.append(m.bias)
+                grouped_params.add(id(m.bias))
         elif isinstance(m, nn.GRU):
             for k in range(m.num_layers):
-                group_decay.append(getattr(m, f'weight_ih_l{k}'))
-                group_decay.append(getattr(m, f'weight_hh_l{k}'))
+                weight_ih = getattr(m, f'weight_ih_l{k}')
+                weight_hh = getattr(m, f'weight_hh_l{k}')
+                if id(weight_ih) not in grouped_params:
+                    group_decay.append(weight_ih)
+                    grouped_params.add(id(weight_ih))
+                if id(weight_hh) not in grouped_params:
+                    group_decay.append(weight_hh)
+                    grouped_params.add(id(weight_hh))
                 if getattr(m, f'bias_ih_l{k}') is not None:
-                    group_no_decay.append(getattr(m, f'bias_ih_l{k}'))
-                    group_no_decay.append(getattr(m, f'bias_hh_l{k}'))
+                    bias_ih = getattr(m, f'bias_ih_l{k}')
+                    bias_hh = getattr(m, f'bias_hh_l{k}')
+                    if id(bias_ih) not in grouped_params:
+                        group_no_decay.append(bias_ih)
+                        grouped_params.add(id(bias_ih))
+                    if id(bias_hh) not in grouped_params:
+                        group_no_decay.append(bias_hh)
+                        grouped_params.add(id(bias_hh))
                 if m.bidirectional:
-                    group_decay.append(getattr(m, f'weight_ih_l{k}_reverse'))
-                    group_decay.append(getattr(m, f'weight_hh_l{k}_reverse'))
+                    weight_ih_reverse = getattr(m, f'weight_ih_l{k}_reverse')
+                    weight_hh_reverse = getattr(m, f'weight_hh_l{k}_reverse')
+                    if id(weight_ih_reverse) not in grouped_params:
+                        group_decay.append(weight_ih_reverse)
+                        grouped_params.add(id(weight_ih_reverse))
+                    if id(weight_hh_reverse) not in grouped_params:
+                        group_decay.append(weight_hh_reverse)
+                        grouped_params.add(id(weight_hh_reverse))
                     if getattr(m, f'bias_ih_l{k}_reverse') is not None:
-                        group_no_decay.append(getattr(m, f'bias_ih_l{k}_reverse'))
-                        group_no_decay.append(getattr(m, f'bias_hh_l{k}_reverse'))
+                        bias_ih_reverse = getattr(m, f'bias_ih_l{k}_reverse')
+                        bias_hh_reverse = getattr(m, f'bias_hh_l{k}_reverse')
+                        if id(bias_ih_reverse) not in grouped_params:
+                            group_no_decay.append(bias_ih_reverse)
+                            grouped_params.add(id(bias_ih_reverse))
+                        if id(bias_hh_reverse) not in grouped_params:
+                            group_no_decay.append(bias_hh_reverse)
+                            grouped_params.add(id(bias_hh_reverse))
         elif isinstance(m, (nn.BatchNorm2d, nn.LayerNorm)):
-            if m.weight is not None:
+            if m.weight is not None and id(m.weight) not in grouped_params:
                 group_no_decay.append(m.weight)
-            if m.bias is not None:
+                grouped_params.add(id(m.weight))
+            if m.bias is not None and id(m.bias) not in grouped_params:
                 group_no_decay.append(m.bias)
+                grouped_params.add(id(m.bias))
         elif isinstance(m, HyperStructure):
             for param in m.parameters():
-                if param.ndim > 1:
-                    group_decay.append(param)
-                else:
-                    group_no_decay.append(param)
+                if id(param) not in grouped_params:
+                    if param.ndim > 1:
+                        group_decay.append(param)
+                    else:
+                        group_no_decay.append(param)
+                    grouped_params.add(id(param))
         elif isinstance(m, hypernet.AC_layer):
-            group_decay.append(m.fc.weight)
-            if m.fc.bias is not None:
+            if id(m.fc.weight) not in grouped_params:
+                group_decay.append(m.fc.weight)
+                grouped_params.add(id(m.fc.weight))
+            if m.fc.bias is not None and id(m.fc.bias) not in grouped_params:
                 group_no_decay.append(m.fc.bias)
+                grouped_params.add(id(m.fc.bias))
 
     total_params = sum(p.numel() for p in module.parameters())
     decay_params = sum(p.numel() for p in group_decay)
     no_decay_params = sum(p.numel() for p in group_no_decay)
+    ## Debug to be sure
+    print("Total params:", total_params)
+    print("Decay params:", decay_params)
+    print("No decay params:", no_decay_params)
+    print("Sum of grouped params:", decay_params + no_decay_params)
+
     assert total_params == decay_params + no_decay_params, "Parameter grouping mismatch!"
 
     groups = [
@@ -103,7 +147,6 @@ def group_weight(module, weight_norm=True):
         dict(params=group_no_decay, weight_decay=0.0)
     ]
     return groups
-
 def create_dense_mask_0(net, device, value):
     """Create a dense mask with all values set to the specified value."""
     for param in net.parameters():
@@ -325,7 +368,7 @@ def get_middle_Fsize(model, input_res=32):
     """Get intermediate sizes for FLOPs calculation."""
     size_out = []
     size_kernel = []
-    size_group = []
+    group_size = []
     size_inchannel = []
     size_outchannel = []
 
@@ -334,7 +377,7 @@ def get_middle_Fsize(model, input_res=32):
         output_channels, output_height, output_width = output[0].size()
         size_out.append(output_height * output_width)
         size_kernel.append(self.kernel_size[0] * self.kernel_size[1])
-        size_group.append(self.groups)
+        group_size.append(self.groups)
         size_inchannel.append(input_channels)
         size_outchannel.append(output_channels)
 
@@ -347,13 +390,13 @@ def get_middle_Fsize(model, input_res=32):
     input = torch.rand(2, 3, input_res, input_res)
     input.require_grad = True
     out = model(input)
-    return size_out, size_kernel, size_group, size_inchannel, size_outchannel
+    return size_out, size_kernel, group_size, size_inchannel, size_outchannel
 
 def get_middle_Fsize_resnet(model, input_res=224):
     """Get intermediate sizes for ResNet FLOPs calculation."""
     size_out = []
     size_kernel = []
-    size_group = []
+    group_size = []
     size_inchannel = []
     size_outchannel = []
 
@@ -362,7 +405,7 @@ def get_middle_Fsize_resnet(model, input_res=224):
         output_channels, output_height, output_width = output[0].size()
         size_out.append(output_height * output_width)
         size_kernel.append(self.kernel_size[0] * self.kernel_size[1])
-        size_group.append(self.groups)
+        group_size.append(self.groups)
         size_inchannel.append(input_channels)
         size_outchannel.append(output_channels)
 
@@ -380,13 +423,13 @@ def get_middle_Fsize_resnet(model, input_res=224):
     input = torch.rand(2, 3, input_res, input_res)
     input.require_grad = True
     out = model(input)
-    return size_out, size_kernel, size_group, size_inchannel, size_outchannel
+    return size_out, size_kernel, group_size, size_inchannel, size_outchannel
 
 def get_middle_Fsize_resnetbb(model, input_res=224, num_gates=2):
     """Get intermediate sizes for ResNetBB FLOPs calculation."""
     size_out = []
     size_kernel = []
-    size_group = []
+    group_size = []
     size_inchannel = []
     size_outchannel = []
 
@@ -395,7 +438,7 @@ def get_middle_Fsize_resnetbb(model, input_res=224, num_gates=2):
         output_channels, output_height, output_width = output[0].size()
         size_out.append(output_height * output_width)
         size_kernel.append(self.kernel_size[0] * self.kernel_size[1])
-        size_group.append(self.groups)
+        group_size.append(self.groups)
         size_inchannel.append(input_channels)
         size_outchannel.append(output_channels)
 
@@ -423,13 +466,13 @@ def get_middle_Fsize_resnetbb(model, input_res=224, num_gates=2):
     input = torch.rand(2, 3, input_res, input_res)
     input.require_grad = True
     out = model(input)
-    return size_out, size_kernel, size_group, size_inchannel, size_outchannel
+    return size_out, size_kernel, group_size, size_inchannel, size_outchannel
 
 def get_middle_Fsize_densenet(model, input_res=224):
     """Get intermediate sizes for DenseNet FLOPs calculation."""
     size_out = []
     size_kernel = []
-    size_group = []
+    group_size = []
     size_inchannel = []
     size_outchannel = []
 
@@ -438,7 +481,7 @@ def get_middle_Fsize_densenet(model, input_res=224):
         output_channels, output_height, output_width = output[0].size()
         size_out.append(output_height * output_width)
         size_kernel.append(self.kernel_size[0] * self.kernel_size[1])
-        size_group.append(self.groups)
+        group_size.append(self.groups)
         size_inchannel.append(input_channels)
         size_outchannel.append(output_channels)
 
@@ -462,14 +505,14 @@ def get_middle_Fsize_densenet(model, input_res=224):
     input = torch.rand(2, 3, input_res, input_res)
     input.require_grad = True
     out = model(input)
-    return size_out, size_kernel, size_group, size_inchannel, size_outchannel
+    return size_out, size_kernel, group_size, size_inchannel, size_outchannel
 
 def get_middle_Fsize_mobnetv3(model, input_res=224):
     """Get intermediate sizes for MobileNetV3 FLOPs calculation."""
     all_dict = {
         'size_out': [],
         'size_kernel': [],
-        'size_group': [],
+        'group_size': [],
         'size_inchannel': [],
         'size_outchannel': [],
         'se_list': [],
@@ -481,7 +524,7 @@ def get_middle_Fsize_mobnetv3(model, input_res=224):
         output_channels, output_height, output_width = output[0].size()
         all_dict['size_out'].append(output_height * output_width)
         all_dict['size_kernel'].append(self.kernel_size[0] * self.kernel_size[1])
-        all_dict['size_group'].append(self.groups)
+        all_dict['group_size'].append(self.groups)
         all_dict['size_inchannel'].append(input_channels)
         all_dict['size_outchannel'].append(output_channels)
 
@@ -632,3 +675,97 @@ class LabelSmoothingLoss(nn.Module):
             true_dist.fill_(self.smoothing / (self.cls - 1))
             true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
         return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
+
+def load_pretrained(pretrained_path, gpu, model, cfg):
+    """Load pretrained weights into the model."""
+    if os.path.isfile(pretrained_path):
+        logger.info(f"=> Loading pretrained checkpoint '{pretrained_path}'")
+        checkpoint = torch.load(pretrained_path, map_location='cpu')
+        state_dict = checkpoint['state_dict']
+        new_state_dict = {}
+        for k, v in state_dict.items():
+            if k.startswith('module.'):
+                k = k[7:]  # remove 'module.' prefix
+            new_state_dict[k] = v
+        model.load_state_dict(new_state_dict, strict=False)
+        logger.info(f"=> Loaded pretrained checkpoint '{pretrained_path}'")
+    else:
+        logger.warning(f"=> No pretrained checkpoint found at '{pretrained_path}'")
+
+class MultiEpochsDataLoader(torch.utils.data.DataLoader):
+    """DataLoader that supports multiple epochs without reinitializing workers."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._DataLoader__initialized = False
+        self.batch_sampler = torch.utils.data._utils.collate.RepeatSampler(self.batch_sampler)
+        self._DataLoader__initialized = True
+        self.iterator = super().__iter__()
+
+    def __len__(self):
+        return len(self.batch_sampler.sampler)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield next(self.iterator)
+
+
+class GradualWarmupScheduler(_LRScheduler):
+    """ Gradually warm-up(increasing) learning rate in optimizer.
+    Proposed in 'Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour'.
+    Args:
+        optimizer (Optimizer): Wrapped optimizer.
+        multiplier: target learning rate = base lr * multiplier if multiplier > 1.0. if multiplier = 1.0, lr starts from 0 and ends up with the base_lr.
+        total_epoch: target learning rate is reached at total_epoch, gradually
+        after_scheduler: after target_epoch, use this scheduler(eg. ReduceLROnPlateau)
+    """
+
+    def __init__(self, optimizer, multiplier, total_epoch, after_scheduler=None):
+        self.multiplier = multiplier
+        if self.multiplier < 1.:
+            raise ValueError('multiplier should be greater than or equal to 1.')
+        self.total_epoch = total_epoch
+        self.after_scheduler = after_scheduler
+        self.finished = False
+        super(GradualWarmupScheduler, self).__init__(optimizer)
+        if version.parse(torch.__version__) > version.parse("1.1.0"):
+            super(GradualWarmupScheduler, self).step()
+
+    def get_lr(self):
+        if self.last_epoch > self.total_epoch:
+            if self.after_scheduler:
+                if not self.finished:
+                    self.after_scheduler.base_lrs = [base_lr * self.multiplier for base_lr in self.base_lrs]
+                    self.finished = True
+                return self.after_scheduler.get_lr()
+            return [base_lr * self.multiplier for base_lr in self.base_lrs]
+
+        if self.multiplier == 1.0:
+            return [base_lr * (float(self.last_epoch) / self.total_epoch) for base_lr in self.base_lrs]
+        else:
+            return [base_lr * ((self.multiplier - 1.) * self.last_epoch / self.total_epoch + 1.) for base_lr in self.base_lrs]
+
+    def step_ReduceLROnPlateau(self, metrics, epoch=None):
+        if epoch is None:
+            epoch = self.last_epoch + 1
+        self.last_epoch = epoch if epoch != 0 else 1  # ReduceLROnPlateau is called at the end of epoch, whereas others are called at beginning
+        if self.last_epoch <= self.total_epoch:
+            warmup_lr = [base_lr * ((self.multiplier - 1.) * self.last_epoch / self.total_epoch + 1.) for base_lr in self.base_lrs]
+            for param_group, lr in zip(self.optimizer.param_groups, warmup_lr):
+                param_group['lr'] = lr
+        else:
+            if epoch is None:
+                self.after_scheduler.step(metrics, None)
+            else:
+                self.after_scheduler.step(metrics, epoch - self.total_epoch)
+
+    def step(self, epoch=None, metrics=None):
+        if type(self.after_scheduler) != ReduceLROnPlateau:
+            if self.finished and self.after_scheduler:
+                if epoch is None:
+                    self.after_scheduler.step()
+                else:
+                    self.after_scheduler.step(epoch - self.total_epoch)
+            else:
+                return super(GradualWarmupScheduler, self).step(epoch)
+        else:
+            self.step_ReduceLROnPlateau(metrics)        
