@@ -14,7 +14,9 @@ args = None
 class Config:
     def __init__(self):
         parser = argparse.ArgumentParser(description="Knowledge Evolution Training with DNR")
-
+        parser.add_argument(
+            "--label-smoothing", default=0.0, type=float, help="Label smoothing epsilon (default: 0.0, no smoothing)"
+        )
         # Core training arguments
         parser.add_argument(
             "--data", help="path to dataset base directory", default="/home/datasets"
