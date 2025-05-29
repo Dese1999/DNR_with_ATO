@@ -1,7 +1,10 @@
 import torch
 import torch.nn as nn
-from .imgnet_utils import load_state_dict_from_url
-from .gate_function import soft_gate, virtual_gate
+from utils.hypernet import soft_gate, virtual_gate
+
+# /content/DNR_with_ATO/models/imgnet_utils.py
+from torch.hub import load_state_dict_from_url
+__all__ = ['load_state_dict_from_url']
 
 __all__ = [
     'ResNet', 'resnet18', 'resnet34', 'my_resnet50', 'resnet101',
