@@ -13,7 +13,7 @@ from . import hypernet  #
 from .hypernet import HyperStructure, custom_STE, virtual_gate
 from torch.optim.lr_scheduler import _LRScheduler, ReduceLROnPlateau
 from packaging import version
-
+import torch.utils.data
 # ATO and DNR Utility Functions
 
 def display_structure(all_parameters, p_flag=False):
@@ -692,12 +692,25 @@ def load_pretrained(pretrained_path, gpu, model, cfg):
     else:
         logger.warning(f"=> No pretrained checkpoint found at '{pretrained_path}'")
 
+
+class _RepeatSampler(object):
+    """Sampler that repeats forever.
+    Args:
+        sampler (Sampler): The sampler to repeat.
+    """
+    def __init__(self, sampler):
+        self.sampler = sampler
+
+    def __iter__(self):
+        while True:
+            yield from iter(self.sampler)
+
 class MultiEpochsDataLoader(torch.utils.data.DataLoader):
     """DataLoader that supports multiple epochs without reinitializing workers."""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._DataLoader__initialized = False
-        self.batch_sampler = torch.utils.data._utils.collate.RepeatSampler(self.batch_sampler)
+        self.batch_sampler = _RepeatSampler(self.batch_sampler)
         self._DataLoader__initialized = True
         self.iterator = super().__iter__()
 
