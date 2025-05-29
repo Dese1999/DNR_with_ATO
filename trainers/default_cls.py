@@ -22,7 +22,7 @@ def set_bn_train(m):
         m.train()
 
 # Training function with ATO masks and DNR logic
-def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimizer, optimizer_hyper, epoch, cur_maskVec, cfg):
+def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimizer, optimizer_hyper, epoch, cur_maskVec, cfg, scheduler=None, scheduler_hyper=None):
     """
     Train the model with ATO pruning masks and DNR logic.
     Args:
@@ -36,6 +36,8 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         epoch: Current epoch number.
         cur_maskVec: Current mask vector (optional, used in later epochs).
         cfg: Configuration object with training parameters.
+        scheduler: Learning rate scheduler for the main model optimizer.
+        scheduler_hyper: Learning rate scheduler for the hyper_net optimizer.
     Returns:
         Tuple of (top1 accuracy, top5 accuracy, average loss, return_vect).
     """
@@ -96,6 +98,9 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
 
         loss.backward()
         optimizer.step()
+        # فراخوانی scheduler بعد از optimizer.step()
+        if scheduler is not None:
+            scheduler.step()
 
         # Apply projection (Group Lasso or OTO) for ATO
         if epoch >= cfg.start_epoch_gl:
@@ -142,6 +147,9 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
                 h_loss = nn.CrossEntropyLoss()(hyper_outputs, val_targets) + res_loss
                 h_loss.backward()
                 optimizer_hyper.step()
+                # فراخوانی scheduler_hyper بعد از optimizer_hyper.step()
+                if scheduler_hyper is not None:
+                    scheduler_hyper.step()
 
                 h_acc1, h_acc5 = accuracy(hyper_outputs, val_targets, topk=(1, 5))
                 h_top1.update(h_acc1.item(), val_inputs.size(0))
