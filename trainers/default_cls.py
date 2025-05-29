@@ -79,7 +79,7 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         optimizer.zero_grad()
 
         # Apply DNR techniques: label smoothing via one_hot and mixup
-        targets_one_hot = one_hot(target, num_classes=1000, smoothing_eps=cfg.label_smoothing if cfg.label_smoothing > 0 else 0.1)
+        targets_one_hot = one_hot(target, num_classes=cfg.num_cls, smoothing_eps=cfg.label_smoothing if cfg.label_smoothing > 0 else 0.1)
         if cfg.mix_up:
             images, targets_one_hot = mixup_func(images, targets_one_hot)
 
