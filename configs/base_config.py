@@ -17,6 +17,9 @@ class Config:
         parser.add_argument(
             "--label-smoothing", default=0.0, type=float, help="Label smoothing epsilon (default: 0.0, no smoothing)"
         )
+        parser.add_argument(
+            "--mix-up", action="store_true", default=False, help="Enable mixup augmentation"
+        )
         # Core training arguments
         parser.add_argument(
             "--data", help="path to dataset base directory", default="/home/datasets"
