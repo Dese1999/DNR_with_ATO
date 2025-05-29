@@ -740,8 +740,8 @@ class GradualWarmupScheduler(_LRScheduler):
         self.after_scheduler = after_scheduler
         self.finished = False
         super(GradualWarmupScheduler, self).__init__(optimizer)
-        if version.parse(torch.__version__) > version.parse("1.1.0"):
-            super(GradualWarmupScheduler, self).step()
+        # if version.parse(torch.__version__) > version.parse("1.1.0"):
+        #     super(GradualWarmupScheduler, self).step()
 
     def get_lr(self):
         if self.last_epoch > self.total_epoch:
