@@ -19,7 +19,7 @@ from torch.utils.data import random_split
 import wandb
 import logging
 #from utils.plot_utils import plot_accuracy, plot_loss, plot_sparsity, plot_layer_sparsity, plot_mask_overlap  
-from utils.hypernet import AC_layer,HyperStructure
+from utils.hypernet import AC_layer,HyperStructure,SelectionBasedRegularization
 from utils.net_utils import reparameterize_non_sparse,display_structure_hyper
 from trainers.default_cls import soft_train, validate, validate_mask
 from data.datasets import load_dataset  
