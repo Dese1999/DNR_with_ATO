@@ -51,8 +51,12 @@ def display_structure_hyper(vectors):
     for i in range(num_layers):
         current_parameter = vectors[i].cpu().data
         if i == 0:
-            print(f"Layer 1 mask sample: {current_parameter[:5]}")
-        sparsity = current_parameter.sum().item() / current_parameter.size(0)
+            if current_parameter.dim() > 0:  # بررسی اینکه تنسور حداقل یک‌بعدی باشد
+                print(f"Layer 1 mask sample: {current_parameter[:5]}")
+            else:
+                print(f"Layer 1 mask sample: {current_parameter.item()} (scalar)")
+        sparsity = current_parameter.sum().item() / max(1, current_parameter.numel())  # 
+    
         layer_sparsity.append(sparsity)
     
     print_string = ''
@@ -62,6 +66,7 @@ def display_structure_hyper(vectors):
         return_string += f'{layer_sparsity[i]:.3f} '
     print(print_string.strip())
     return return_string.strip()
+    
 def group_weight(module, weight_norm=True):
     """Group model parameters for optimization in DNR framework."""
     group_decay = []
