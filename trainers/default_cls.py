@@ -93,7 +93,7 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         # Compute selection loss for ATO
         weights = model.get_weights()
         with torch.no_grad():
-            sel_loss = cfg.selection_reg(weights, masks) if hasattr(cfg, 'selection_reg') else torch.tensor(0.0).cuda()
+            sel_loss = cfg.selection_reg(weights, masks) if hasattr(cfg, 'selection_reg') else 0.0
         loss += sel_loss
 
         loss.backward()
@@ -125,7 +125,8 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         losses.update(loss.item(), images.size(0))
         #############
         print(type(sel_loss), sel_loss)
-        alignments.update(sel_loss.item(), images.size(0))
+        alignments.update(sel_loss.item() if isinstance(sel_loss, torch.Tensor) else sel_loss, images.size(0))
+        #alignments.update(sel_loss.item(), images.size(0))
         top1.update(acc1.item(), images.size(0))
         top5.update(acc5.item(), images.size(0))
 
