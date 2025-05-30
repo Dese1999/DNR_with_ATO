@@ -99,7 +99,7 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
             #sel_loss = cfg.selection_reg(weights, masks) if hasattr(cfg, 'selection_reg') else 0.0
             if hasattr(cfg, 'selection_reg') and weights and masks:
                 sel_loss = cfg.selection_reg(weights, masks)
-                #print(f"sel_loss: {sel_loss}, type: {type(sel_loss)}, weights_len: {len(weights)}, masks_len: {len(masks)}")
+                print(f"sel_loss: {sel_loss}, type: {type(sel_loss)}, weights_len: {len(weights)}, masks_len: {len(masks)}")
             else:
                 sel_loss = torch.tensor(0.0, device='cuda')
                 #print(f"No selection_reg or empty weights/masks: hasattr={hasattr(cfg, 'selection_reg')}, weights={bool(weights)}, masks={bool(masks)}")
