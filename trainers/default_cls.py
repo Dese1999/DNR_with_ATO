@@ -165,7 +165,8 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         end = time.time()
 
         if i % cfg.print_freq == 0:
-            progress.print(i)
+            #progress.print(i)
+            progress.display(i)
 
     print("Project Lmd in this Epoch:", lmdValue)
     if epoch >= cfg.start_epoch:
