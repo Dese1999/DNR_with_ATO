@@ -93,12 +93,11 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         # Compute selection loss for ATO
         weights = model.get_weights()
         with torch.no_grad():
-            sel_loss = cfg.selection_reg(weights, masks) if hasattr(cfg, 'selection_reg') else 0.0
+            sel_loss = cfg.selection_reg(weights, masks) if hasattr(cfg, 'selection_reg') else torch.tensor(0.0).cuda()
         loss += sel_loss
 
         loss.backward()
         optimizer.step()
-        # فراخوانی scheduler بعد از optimizer.step()
         if scheduler is not None:
             scheduler.step()
 
@@ -149,7 +148,6 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
                 h_loss = nn.CrossEntropyLoss()(hyper_outputs, val_targets) + res_loss
                 h_loss.backward()
                 optimizer_hyper.step()
-                # فراخوانی scheduler_hyper بعد از optimizer_hyper.step()
                 if scheduler_hyper is not None:
                     scheduler_hyper.step()
 
