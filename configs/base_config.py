@@ -37,7 +37,7 @@ class Config:
             "--structure", type=str, default="[]", help="Structure list for SelectionBasedRegularization (e.g., [64, 64, 128])"
         )
         parser.add_argument(
-            "--grad-mul", default=1.0, type=float, help="Gradient multiplier for SelectionBasedRegularization"
+            "--grad-mul", default=10.0, type=float, help="Gradient multiplier for SelectionBasedRegularization"
         )
         # Core training arguments
         parser.add_argument(
