@@ -124,6 +124,8 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         # Compute accuracy
         acc1, acc5 = accuracy(outputs, target, topk=(1, 5))
         losses.update(loss.item(), images.size(0))
+        #############
+        print(type(sel_loss), sel_loss)
         alignments.update(sel_loss.item(), images.size(0))
         top1.update(acc1.item(), images.size(0))
         top5.update(acc5.item(), images.size(0))
