@@ -125,7 +125,10 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
     ratio = (len(train_loader.dataset) / cfg.hyper_step) / len(train_loader.dataset)
     _, val_gate_dataset = random_split(train_loader.dataset, [len(train_loader.dataset) - int(ratio * len(train_loader.dataset)), int(ratio * len(train_loader.dataset))])
     val_loader_gate = net_utils.MultiEpochsDataLoader(val_gate_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=4, pin_memory=True)
-
+    ###
+    cfg.selection_reg = SelectionBasedRegularization(args=cfg, model=model)
+    print("Checking selection_reg:", hasattr(cfg, 'selection_reg'))
+    
     epoch_metrics = {"train_acc1": [], "train_acc5": [], "train_loss": [], "test_acc1": [], "test_acc5": [], "test_loss": [], "avg_sparsity": [], "mask_update": []}
     for epoch in range(cfg.epochs):
         train_acc1, train_acc5, train_loss, cur_mask_vec = soft_train(
