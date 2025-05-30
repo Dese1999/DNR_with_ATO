@@ -356,7 +356,7 @@ def validate(val_loader, model, criterion, cfg, epoch):
                 #progress.print(i)
                 progress.display(i)
 
-        progress.print(len(val_loader))
+        progress.display(len(val_loader))
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'.format(top1=top1, top5=top5))
 
     return top1.avg, top5.avg, losses.avg
