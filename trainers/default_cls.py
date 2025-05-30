@@ -94,6 +94,8 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         # Compute selection loss for ATO
         weights = model.get_weights()
         with torch.no_grad():
+            print("Weights length:", len(weights) if weights else 0)
+            print("Masks length:", len(masks) if masks else 0)
             #sel_loss = cfg.selection_reg(weights, masks) if hasattr(cfg, 'selection_reg') else 0.0
         #loss += sel_loss
             if hasattr(cfg, 'selection_reg') and weights and masks:
