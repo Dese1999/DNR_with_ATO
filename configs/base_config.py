@@ -114,7 +114,7 @@ class Config:
         )
         
         parser.add_argument(
-            '--start_epoch_gl', default=100, type=int)
+            '--start_epoch_gl', default=20, type=int)
 
         parser.add_argument(
             "--gates", default=2, type=int, help="number of gates in the model"
