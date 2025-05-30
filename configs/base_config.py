@@ -20,6 +20,22 @@ class Config:
         parser.add_argument(
             "--mix-up", action="store_true", default=False, help="Enable mixup augmentation"
         )
+        # Parameters for SelectionBasedRegularization
+        parser.add_argument(
+            "--gl-lam", default=0.0001, type=float, help="Group Lasso coefficient for SelectionBasedRegularization"
+        )
+        parser.add_argument(
+            "--p", default=0.5, type=float, help="Target pruning rate for ATO"
+        )
+        parser.add_argument(
+            "--use-fim", action="store_true", default=False, help="Use Fisher Information Matrix for pruning"
+        )
+        parser.add_argument(
+            "--structure", type=str, default="[]", help="Structure list for SelectionBasedRegularization (e.g., [64, 64, 128])"
+        )
+        parser.add_argument(
+            "--grad-mul", default=1.0, type=float, help="Gradient multiplier for SelectionBasedRegularization"
+        )
         # Core training arguments
         parser.add_argument(
             "--data", help="path to dataset base directory", default="/home/datasets"
