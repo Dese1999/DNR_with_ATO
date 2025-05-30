@@ -93,6 +93,10 @@ class Config:
         parser.add_argument(
             "--start-epoch-hyper", default=20, type=int, help="start epoch for hypernet updates"
         )
+        
+        parser.add_argument(
+            '--start_epoch_gl', default=100, type=int)
+
         parser.add_argument(
             "--gates", default=2, type=int, help="number of gates in the model"
         )
@@ -108,6 +112,9 @@ class Config:
         parser.add_argument(
             "--hyper-base", default=3.0, type=float, help="Base parameter for HyperStructure"
         )
+        parser.add_argument(
+            '--hyper_step', default=20, type=int)
+
         # Additional parameters for HyperStructure and related classes
         parser.add_argument(
             "--model-name", type=str, default="resnet", help="Model type (e.g., resnet, mobnetv2, mobnetv3)"
@@ -118,6 +125,7 @@ class Config:
         parser.add_argument(
             "--se-list", type=str, default="[False, False, False, False]", help="List of SE layer flags (e.g., [False, False])"
         )
+        
         parser.add_argument(
             "--concrete-flag", action="store_true", default=False, help="Use concrete distribution for soft_gate"
         )
