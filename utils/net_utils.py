@@ -20,21 +20,30 @@ def display_structure(all_parameters, p_flag=False):
     """Display the sparsity of the model's parameters."""
     layer_sparsity = []
     num_layers = 0
-    for name, param in all_parameters.items():
-        if "weight" in name and "bn" not in name and "downsample" not in name:
+    
+    if isinstance(all_parameters, dict) or hasattr(all_parameters, 'items'):
+        # Dictionary mode (supports named_parameters)
+        for name, param in all_parameters.items():
+            if "weight" in name and "bn" not in name and "downsample" not in name:
+                current_parameter = param.cpu().data
+                num_layers += 1
+                if p_flag:
+                    sparsity = current_parameter.sum().item() / (current_parameter.size(0) * current_parameter[0].nelement())
+                else:
+                    sparsity = current_parameter.sum().item() / current_parameter[0].nelement()
+                layer_sparsity.append(sparsity)
+    else:
+        # List mode (supports hyper_net.transform_output)
+        for param in all_parameters:
             current_parameter = param.cpu().data
             num_layers += 1
-            if p_flag:
-                sparsity = current_parameter.sum().item() / (current_parameter.size(0) * current_parameter[0].nelement())
-            else:
-                sparsity = current_parameter.sum().item() / current_parameter[0].nelement()
+            sparsity = current_parameter.sum().item() / current_parameter.nelement()
             layer_sparsity.append(sparsity)
 
     print_string = ''
     for i in range(num_layers):
         print_string += 'l-%d s-%.3f ' % (i + 1, layer_sparsity[i])
-    print(print_string)
-
+    print(print_string.strip())
 def display_structure_hyper(vectors):
     """Display the sparsity of each layer's mask vector in DNR."""
     num_layers = len(vectors)
