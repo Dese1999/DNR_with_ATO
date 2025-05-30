@@ -261,4 +261,109 @@ def prob_round_torch(x):
     else:
         stochastic_round = torch.rand(x.size(0)) < x
     return stochastic_round
-    
+Added SelectionBasedRegularization class
+
+
+class SelectionBasedRegularization(nn.Module):
+    def __init__(self, args, model=None):
+        super().__init__()
+        self.grad_mul = getattr(args, "grad_mul", 1.0)
+        self.structure = getattr(args, "structure", [])
+        self.lam = getattr(args, "gl_lam", 0.0001)
+        self.model_name = getattr(args, "model_name", "resnet")
+        self.block_string = getattr(args, "block_string", "BasicBlock")
+        self.pruning_rate = getattr(args, "p", 0.5)  # Target pruning rate (ATO)
+        self.use_fim = getattr(args, "use_fim", False)  # Use Fisher Information Matrix
+        self.model = model  # Main model for FIM computation
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Dynamically adjust lam based on pruning rate
+        self.adjust_lam()
+
+    def adjust_lam(self):
+        """Dynamically adjust Group Lasso coefficient based on pruning rate."""
+        if self.pruning_rate < 0.3:
+            self.lam *= 0.5  # Reduce lam for lower pruning
+        elif self.pruning_rate > 0.7:
+            self.lam *= 2.0  # Increase lam for higher pruning
+
+    def compute_fim(self, weights, masks):
+        """Compute Fisher Information Matrix for identifying important weights."""
+        if not self.use_fim or self.model is None:
+            return torch.tensor(0.0).to(self.device)
+        fim = []
+        for (w_up, w_low), (m_out, m_in) in zip(weights, masks):
+            grad_up = torch.autograd.grad(w_up.sum(), self.model.parameters(), create_graph=True, allow_unused=True)[0]
+            grad_low = torch.autograd.grad(w_low.sum(), self.model.parameters(), create_graph=True, allow_unused=True)[0]
+            fim_up = grad_up.pow(2).mean() if grad_up is not None else 0.0
+            fim_low = grad_low.pow(2).mean() if grad_low is not None else 0.0
+            fim.append(fim_up + fim_low)
+        return torch.tensor(fim).mean().to(self.device)
+
+    def forward(self, weights, masks):
+        """Compute Group Lasso loss for pruning."""
+        if self.model_name == "resnet":
+            if self.block_string == "BasicBlock":
+                return self.basic_forward(weights, masks)
+            elif self.block_string == "Bottleneck":
+                return self.bb_forward(weights, masks)
+        elif self.model_name in ["mobnetv2", "mobnetv3"]:
+            return self.mobilenet_forward(weights, masks)
+        else:
+            raise ValueError(f"Unsupported model: {self.model_name}")
+
+    def basic_forward(self, weights, masks):
+        """Group Lasso for ResNet BasicBlock."""
+        gl_list = []
+        for i in range(len(self.structure)):
+            w_up, w_low = weights[i]
+            m_out, m_in = masks[i]
+            m_out = custom_STE.apply(m_out)
+            m_in = custom_STE.apply(m_in)
+            gl_loss = (w_up * (1 - m_out)).pow(2).sum((1, 2, 3)).add(1e-8).pow(0.5).sum() + \
+                      (w_low * (1 - m_in)).pow(2).sum((0, 2, 3)).add(1e-8).pow(0.5).sum()
+            gl_list.append(gl_loss)
+        sum_loss = self.lam * sum(gl_list) / len(gl_list)
+        if self.use_fim:
+            fim_loss = self.compute_fim(weights, masks)
+            sum_loss += 0.1 * fim_loss
+        return sum_loss
+
+    def bb_forward(self, weights, masks):
+        """Group Lasso for ResNet Bottleneck."""
+        gl_list = []
+        for i in range(len(weights)):
+            w_up, w_middle, w_low = weights[i]
+            m_out, mm_in, mm_out, m_in = masks[i]
+            m_out = custom_STE.apply(m_out)
+            mm_in = custom_STE.apply(mm_in)
+            mm_out = custom_STE.apply(mm_out)
+            m_in = custom_STE.apply(m_in)
+            gl_loss = (w_up * (1 - m_out)).pow(2).sum((1, 2, 3)).add(1e-8).pow(0.5).sum() + \
+                      (w_middle * (1 - mm_out)).pow(2).sum((1, 2, 3)).add(1e-8).pow(0.5).sum() + \
+                      (w_low * (1 - m_in)).pow(2).sum((0, 2, 3)).add(1e-8).pow(0.5).sum()
+            gl_list.append(gl_loss)
+        sum_loss = self.lam * sum(gl_list) / len(gl_list)
+        if self.use_fim:
+            fim_loss = self.compute_fim(weights, masks)
+            sum_loss += 0.1 * fim_loss
+        return sum_loss
+
+    def mobilenet_forward(self, weights, masks):
+        """Group Lasso for MobileNetV2/V3."""
+        gl_list = []
+        for i in range(len(weights)):
+            w_up, w_middle, w_low = weights[i]
+            m_out, m_middle, m_in = masks[i]
+            m_out = custom_STE.apply(m_out)
+            m_middle = custom_STE.apply(m_middle)
+            m_in = custom_STE.apply(m_in)
+            gl_loss = (w_up * (1 - m_out)).pow(2).sum((1, 2, 3)).add(1e-8).pow(0.5).sum() + \
+                      (w_middle * (1 - m_middle)).pow(2).sum((1, 2, 3)).add(1e-8).pow(0.5).sum() + \
+                      (w_low * (1 - m_in)).pow(2).sum((0, 2, 3)).add(1e-8).pow(0.5).sum()
+            gl_list.append(gl_loss)
+        sum_loss = self.lam * sum(gl_list) / len(gl_list)
+        if self.use_fim:
+            fim_loss = self.compute_fim(weights, masks)
+            sum_loss += 0.1 * fim_loss
+        return sum_loss    
