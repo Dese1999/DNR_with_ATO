@@ -20,6 +20,9 @@ class Config:
         parser.add_argument(
             "--mix-up", action="store_true", default=False, help="Enable mixup augmentation"
         )
+        parser.add_argument(
+            '--print-freq', default=10, type=int,
+                    metavar='N', help='print frequency (default: 10)')
         # Parameters for SelectionBasedRegularization
         parser.add_argument(
             "--gl-lam", default=0.0001, type=float, help="Group Lasso coefficient for SelectionBasedRegularization"
