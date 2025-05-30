@@ -202,14 +202,23 @@ def reparameterize_non_sparse(cfg, net, net_sparse_set):
     """Re-parameterize the model by applying masks from HyperStructure in DNR."""
     device = cfg.device if hasattr(cfg, 'device') else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    for (name, param), mask_param in zip(net.named_parameters(), net_sparse_set.items()):
+    mask_idx = 0  # 
+    mask_list = net_sparse_set  # 
+    
+    for name, param in net.named_parameters():
         if 'weight' in name and 'bn' not in name and 'downsample' not in name:
-            param.data = param.data * mask_param.to(device)
-            re_init_param = torch.empty(param.data.shape, device=device)
-            nn.init.kaiming_uniform_(re_init_param, a=math.sqrt(5))
-            re_init_param.data[mask_param == 0] = 0
-            re_init_param.data[mask_param == 1] = 0
-            param.data = param.data + re_init_param.data
+            if mask_idx < len(mask_list):  # 
+                mask_param = mask_list[mask_idx].to(device)
+                param.data = param.data * mask_param
+                re_init_param = torch.empty(param.data.shape, device=device)
+                nn.init.kaiming_uniform_(re_init_param, a=math.sqrt(5))
+                re_init_param.data[mask_param == 0] = 0
+                re_init_param.data[mask_param == 1] = 0
+                param.data = param.data + re_init_param.data
+                mask_idx += 1
+            else:
+                raise ValueError("Not enough masks in net_sparse_set for all weight parameters!")
+    
     return net
 
 def re_init_weights(shape, device, reinint_method='kaiming'):
