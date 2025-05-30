@@ -199,28 +199,42 @@ def save_checkpoint(state, is_best, filename="checkpoint.pth", save=True):
         shutil.copyfile(filename, filename.parent / "model_best.pth")
 
 def reparameterize_non_sparse(cfg, net, net_sparse_set):
-    """Re-parameterize the model by applying masks from HyperStructure in DNR."""
+    # Determine the device (GPU or CPU) from cfg if available, otherwise use CUDA if possible, else CPU
     device = cfg.device if hasattr(cfg, 'device') else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    mask_idx = 0  # 
-    mask_list = net_sparse_set  # 
+    # Initialize index to track the current mask in the mask_list
+    mask_idx = 0
     
+    # Assign net_sparse_set (expected to be a list of masks) to mask_list
+    mask_list = net_sparse_set
+    
+    # Iterate over named parameters of the model (net)
     for name, param in net.named_parameters():
+        # Process only weight parameters, excluding batch norm (bn) and downsample layers
         if 'weight' in name and 'bn' not in name and 'downsample' not in name:
-            if mask_idx < len(mask_list):  # 
+            # Check if there are enough masks in mask_list
+            if mask_idx < len(mask_list):
+                # Get the current mask and move it to the specified device
                 mask_param = mask_list[mask_idx].to(device)
-                param.data = param.data * mask_param
+                
+                # Create a new tensor with the same shape as param.data on the specified device
                 re_init_param = torch.empty(param.data.shape, device=device)
+                
+                # Initialize the new tensor with kaiming_uniform_ method
                 nn.init.kaiming_uniform_(re_init_param, a=math.sqrt(5))
-                re_init_param.data[mask_param == 0] = 0
-                re_init_param.data[mask_param == 1] = 0
-                param.data = param.data + re_init_param.data
+                
+                # Reinitialize weights where mask is 0 with values from re_init_param
+                param.data[mask_param == 0] = re_init_param.data[mask_param == 0]
+                
+                # Weights where mask is 1 remain unchanged (implicitly preserved)
+                # Increment mask index to move to the next mask
                 mask_idx += 1
             else:
-                raise ValueError("Not enough masks in net_sparse_set for all weight parameters!")
+                # Raise an error if there are not enough masks for all weight parameters
+                raise ValueError("Not enough masks in net_sparse_set!")
     
+    # Return the modified model
     return net
-
 def re_init_weights(shape, device, reinint_method='kaiming'):
     """Re-initialize weights using the specified method."""
     mask = torch.empty(shape, requires_grad=False, device=device)
