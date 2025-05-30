@@ -39,6 +39,10 @@ class Config:
         parser.add_argument(
             "--grad-mul", default=10.0, type=float, help="Gradient multiplier for SelectionBasedRegularization"
         )
+        parser.add_argument('--reg_w', default=4.0, type=float)  # 4.0 
+        parser.add_argument('--start_epoch_hyper', default=20, type=int)
+        parser.add_argument('--start_epoch_gl', default=100, type=int)
+
         # Core training arguments
         parser.add_argument(
             "--data", help="path to dataset base directory", default="/home/datasets"
