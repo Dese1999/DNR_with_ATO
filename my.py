@@ -131,7 +131,7 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
     print("Checking selection_reg:", hasattr(cfg, 'selection_reg'))
     
     epoch_metrics = {"train_acc1": [], "train_acc5": [], "train_loss": [], "test_acc1": [], "test_acc5": [], "test_loss": [], "avg_sparsity": [], "mask_update": []}
-    print(f"masks type: {type(masks)}, len: {len(masks)}, sample: {masks[0] if masks else None}")
+    #print(f"masks type: {type(masks)}, len: {len(masks)}, sample: {masks[0] if masks else None}")
     for epoch in range(cfg.epochs):
         train_acc1, train_acc5, train_loss, cur_mask_vec = soft_train(
             train_loader, model, hyper_net, criterion, val_loader_gate, 
