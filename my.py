@@ -18,6 +18,7 @@ from torchvision import transforms, datasets
 from torch.utils.data import random_split
 import wandb
 import logging
+import inspect
 #from utils.plot_utils import plot_accuracy, plot_loss, plot_sparsity, plot_layer_sparsity, plot_mask_overlap  
 from utils.hypernet import AC_layer,HyperStructure,SelectionBasedRegularization
 from utils.net_utils import reparameterize_non_sparse,display_structure_hyper
@@ -118,7 +119,7 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
     base_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, int((cfg.epochs - 5) / 2))
     scheduler = net_utils.GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=5, after_scheduler=base_scheduler)
 
-    import inspect
+    
     print(f"cfg.data: {cfg.data}")
     train_loader, val_loader = load_dataset(name=cfg.set, root=cfg.data, path=cfg.data, sample='default', batch_size=cfg.batch_size)
     # Create validation subset for HyperNet
@@ -130,6 +131,7 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
     print("Checking selection_reg:", hasattr(cfg, 'selection_reg'))
     
     epoch_metrics = {"train_acc1": [], "train_acc5": [], "train_loss": [], "test_acc1": [], "test_acc5": [], "test_loss": [], "avg_sparsity": [], "mask_update": []}
+    print(f"masks type: {type(masks)}, len: {len(masks)}, sample: {masks[0] if masks else None}")
     for epoch in range(cfg.epochs):
         train_acc1, train_acc5, train_loss, cur_mask_vec = soft_train(
             train_loader, model, hyper_net, criterion, val_loader_gate, 
@@ -148,10 +150,12 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
             avg_sparsity = sum(sparsity_values) / len(sparsity_values) if sparsity_values else 0
             masks = hyper_net.vector2mask(cur_mask_vec)
             layer_sparsity = {}
-            for name, param in masks.items():
-                if "weight" in name and "bn" not in name and "downsample" not in name:
+            for idx, mask_sublist in enumerate(masks):
+                for sub_idx, param in enumerate(mask_sublist):
+                    name = f"layer_{idx}_mask_{sub_idx}"
                     sparsity = 100 * (1 - param.mean().item())
                     layer_sparsity[name] = sparsity
+           
             if "layer_sparsity" not in epoch_metrics:
                 epoch_metrics["layer_sparsity"] = {}
             for layer, sparsity in layer_sparsity.items():
@@ -238,10 +242,11 @@ def start_KE(cfg):
         mask_history[gen] = {}
         if cur_mask_vec is not None:
             masks = hyper_net.vector2mask(cur_mask_vec)
-            for name, param in masks.items():
-                if "weight" in name and "bn" not in name and "downsample" not in name:
+            mask_history[gen] = {}
+            for idx, mask_sublist in enumerate(masks):
+                for sub_idx, param in enumerate(mask_sublist):
+                    name = f"layer_{idx}_mask_{sub_idx}"
                     mask_history[gen][name] = param.data.clone().cpu().numpy()
-
         try:
             expected_length = cfg.epochs
             for key in epoch_metrics:
