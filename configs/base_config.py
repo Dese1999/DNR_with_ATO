@@ -41,7 +41,6 @@ class Config:
         )
         parser.add_argument('--reg_w', default=4.0, type=float)  # 4.0 
         parser.add_argument('--start_epoch_hyper', default=20, type=int)
-        parser.add_argument('--start_epoch_gl', default=100, type=int)
 
         # Core training arguments
         parser.add_argument(
@@ -118,7 +117,7 @@ class Config:
         )
         
         parser.add_argument(
-            '--start_epoch_gl', default=20, type=int)
+            '--start_epoch_gl', default=100, type=int)
 
         parser.add_argument(
             "--gates", default=2, type=int, help="number of gates in the model"
