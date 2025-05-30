@@ -261,8 +261,6 @@ def prob_round_torch(x):
     else:
         stochastic_round = torch.rand(x.size(0)) < x
     return stochastic_round
-Added SelectionBasedRegularization class
-
 
 class SelectionBasedRegularization(nn.Module):
     def __init__(self, args, model=None):
