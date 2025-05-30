@@ -175,6 +175,7 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
         if epoch == cfg.epochs - 1:
             with torch.no_grad():
                 masks = hyper_net.vector2mask(cur_mask_vec)
+                print(f"masks type: {type(masks)}, content: {masks}")
                 model = reparameterize_non_sparse(cfg, model, masks)
 
     if cfg.save_model:
