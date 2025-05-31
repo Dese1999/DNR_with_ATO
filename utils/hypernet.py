@@ -77,24 +77,34 @@ class HyperStructure(nn.Module):
         device = self.bn1.weight.device
         self.inputs = self.inputs.to(device)
         self.h0 = self.h0.to(device)
-        outputs, hn = self.Bi_GRU(self.inputs, self.h0)
+        outputs, hn = self.Bi_GRU(self.inputs, self.h0)  # outputs: [len(structure), 1, 256]
         outputs = [F.relu(self.bn1(outputs[i, :])) for i in range(len(self.structure))]
         outputs = [self.mh_fc[i](outputs[i]) for i in range(len(self.mh_fc))]
-        out = torch.cat(outputs, dim=1)
+        out = torch.cat(outputs, dim=0)  # [sum(structure)]
         out = gumbel_softmax_sample(out, T=self.T, offset=self.base, device=device)
         if not self.training_mode:
             out = hard_concrete(out, device=device)
-        return out.squeeze()
+        return out
 
+    # def transform_output(self, inputs):
+    #     arch_vector = []
+    #     start = 0
+    #     for i in range(len(self.structure)):
+    #         end = start + self.structure[i]
+    #         arch_vector.append(inputs[start:end])
+    #         start = end
+    #     return arch_vector
     def transform_output(self, inputs):
-        arch_vector = []
+        if inputs.dim() == 1:
+            return inputs  #  [3968]
         start = 0
-        for i in range(len(self.structure)):
-            end = start + self.structure[i]
+        arch_vector = []
+        for width in self.structure:
+            end = start + width
             arch_vector.append(inputs[start:end])
             start = end
-        return arch_vector
-
+        return torch.cat(arch_vector)  
+        
     def resource_output(self):
         device = self.bn1.weight.device
         self.inputs = self.inputs.to(device)
