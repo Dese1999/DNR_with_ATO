@@ -162,7 +162,7 @@ class HyperStructure(nn.Module):
             item_list.append(mask_input)
             mask_list.append(item_list)
             start = end
-            print(f"Layer {i}: mask_out shape {mask_output.shape}, mask_in shape {mask_input.shape}, out_channels {out_channels}, in_channels {in_channels}")
+            #print(f"Layer {i}: mask_out shape {mask_output.shape}, mask_in shape {mask_input.shape}, out_channels {out_channels}, in_channels {in_channels}")
         return mask_list
     def vector2mask_resnetbb(self, inputs):
         vector = self.transform_output(inputs)
