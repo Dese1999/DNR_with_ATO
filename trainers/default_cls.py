@@ -14,9 +14,7 @@ from utils.hypernet import SelectionBasedRegularization
 # Specify log file path (can be customized)
 log_file = "sparsity_log.txt"
 
-# Log Project Lmd value
-with open(log_file, 'a') as f:
-    f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Project Lmd in this Epoch: {lmdValue}\n")
+
 __all__ = ["soft_train_ato", "train_ato_no_mask", "validate_ato_mask", "validate_ato_no_mask", "one_step_hypernet_ato", "one_step_net_ato"]
 
 def set_bn_eval(m):
@@ -182,7 +180,10 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
             #progress.print(i)
             progress.display(i)
 
-    print("Project Lmd in this Epoch:", lmdValue)
+    #print("Project Lmd in this Epoch:", lmdValue)
+    # Log Project Lmd value
+    with open(log_file, 'a') as f:
+        f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Project Lmd in this Epoch: {lmdValue}\n")
     if epoch >= cfg.start_epoch:
         if epoch < int((cfg.epochs - 5) / 2) + 5:
             with torch.no_grad():
