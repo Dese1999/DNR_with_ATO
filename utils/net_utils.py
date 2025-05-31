@@ -221,6 +221,9 @@ def save_checkpoint(state, is_best, filename="checkpoint.pth", save=True):
 import torch
 import numpy as np
 
+import torch
+import numpy as np
+
 def reparameterize_non_sparse(cfg, net, net_sparse_set):
     device = cfg.device if hasattr(cfg, 'device') else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     mask_idx = 0
@@ -230,22 +233,25 @@ def reparameterize_non_sparse(cfg, net, net_sparse_set):
         if 'weight' in name and 'bn' not in name and 'downsample' not in name:
             if mask_idx < len(mask_list):
                 mask_param = mask_list[mask_idx]
-                # Handle nested list of tensors
                 if isinstance(mask_param, list):
-                    # Extract the first tensor and flatten it
                     mask_param = mask_param[0] if mask_param else torch.ones_like(param.data)
                     if isinstance(mask_param, torch.Tensor):
-                        mask_param = mask_param.to(device).view(param.data.shape)
+                        # Expand channel-wise mask to match weight shape
+                        if mask_param.shape[0] == param.data.shape[0]:  # Check if mask is channel-wise
+                            mask_param = mask_param.to(device).view(-1, 1, 1, 1)  # [64, 1, 1, 1]
+                            mask_param = mask_param.expand_as(param.data)  # [64, 3, 7, 7]
+                        else:
+                            mask_param = mask_param.to(device).view(param.data.shape)
                     else:
                         raise ValueError(f"Invalid mask type: {type(mask_param)} at index {mask_idx}")
                 elif isinstance(mask_param, torch.Tensor):
-                    mask_param = mask_param.to(device).view(param.data.shape)
+                    if mask_param.shape[0] == param.data.shape[0]:
+                        mask_param = mask_param.to(device).view(-1, 1, 1, 1)
+                        mask_param = mask_param.expand_as(param.data)
+                    else:
+                        mask_param = mask_param.to(device).view(param.data.shape)
                 else:
                     raise ValueError(f"Invalid mask type: {type(mask_param)} at index {mask_idx}")
-                
-                # Ensure mask matches param shape
-                if mask_param.shape != param.data.shape:
-                    mask_param = mask_param.view(param.data.shape)
                 
                 re_init_param = torch.empty(param.data.shape, device=device)
                 nn.init.kaiming_uniform_(re_init_param, a=math.sqrt(5))
