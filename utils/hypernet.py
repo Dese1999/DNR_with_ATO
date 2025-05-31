@@ -78,12 +78,17 @@ class HyperStructure(nn.Module):
         self.inputs = self.inputs.to(device)
         self.h0 = self.h0.to(device)
         outputs, hn = self.Bi_GRU(self.inputs, self.h0)  # outputs: [len(structure), 1, 256]
-        outputs = [F.relu(self.bn1(outputs[i, :])) for i in range(len(self.structure))]
+        outputs = [F.relu(self.bn1(outputs[i, 0, :])) for i in range(len(self.structure))]
         outputs = [self.mh_fc[i](outputs[i]) for i in range(len(self.mh_fc))]
+        for i, output in enumerate(outputs):
+            print(f"Output {i} shape: {output.shape}, expected: [{self.structure[i]}]")
+            if output.shape[0] != self.structure[i]:
+                raise ValueError(f"Output {i} has shape {output.shape}, expected [{self.structure[i]}]")
         out = torch.cat(outputs, dim=0)  # [sum(structure)]
         out = gumbel_softmax_sample(out, T=self.T, offset=self.base, device=device)
         if not self.training_mode:
             out = hard_concrete(out, device=device)
+        print(f"HyperStructure forward output shape: {out.shape}, expected length: {sum(self.structure)}")
         return out
 
     # def transform_output(self, inputs):
@@ -95,15 +100,19 @@ class HyperStructure(nn.Module):
     #         start = end
     #     return arch_vector
     def transform_output(self, inputs):
-        if inputs.dim() == 1:
-            return inputs  #  [3968]
-        start = 0
-        arch_vector = []
-        for width in self.structure:
-            end = start + width
-            arch_vector.append(inputs[start:end])
-            start = end
-        return torch.cat(arch_vector)  
+        if inputs.dim() == 1 and len(inputs) == sum(self.structure):
+            return inputs  # بازگشت بردار پیوسته [3904]
+        raise ValueError(f"Expected 1D vector of length {sum(self.structure)}, got shape {inputs.shape}")
+    # def transform_output(self, inputs):
+    #     if inputs.dim() == 1 and len(inputs) == sum(self.structure):
+    #         return inputs  # 
+    #     start = 0
+    #     arch_vector = []
+    #     for width in self.structure:
+    #         end = start + width
+    #         arch_vector.append(inputs[start:end])
+    #         start = end
+    #     return torch.cat(arch_vector)  
         
     def resource_output(self):
         device = self.bn1.weight.device
@@ -129,47 +138,32 @@ class HyperStructure(nn.Module):
     #         mask_list.append(item_list)
     #     return mask_list
     def vector2mask_resnet(self, inputs):
-        vector = self.transform_output(inputs)  # [sum(structure)]، مثلاً [3328]
+        vector = self.transform_output(inputs)  # [sum(structure)]
         mask_list = []
         start = 0
-        
-        # بررسی طول بردار
-        total_channels = sum(self.structure)  # مثلاً 3328
-        if len(vector) < total_channels:
+        total_channels = sum(self.structure)  # مثلاً 3904
+        if len(vector) != total_channels:
             print(f"Error: Vector length {len(vector)} is less than required {total_channels}")
             return []
-        
         for i in range(len(self.structure)):
             item_list = []
-            out_channels = self.structure[i]  # تعداد کانال‌های خروجی لایه فعلی، مثلاً 64 برای conv1
-            in_channels = 3 if i == 0 else self.structure[i-1]  # کانال‌های ورودی: 3 برای conv1، یا خروجی لایه قبلی
-            
-            # برش vector برای mask_output
+            out_channels = self.structure[i]
+            in_channels = 3 if i == 0 else self.structure[i-1]
             end = start + out_channels
             if end > len(vector):
                 print(f"Error: Not enough values for layer {i}. Expected {end}, got {len(vector)}")
                 return mask_list
-            mask_output = vector[start:end].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)  # [out_channels, 1, 1, 1]
-            
-            # mask_input برای conv1 به صورت ثابت (همه 1) یا از vector
+            mask_output = vector[start:end].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
             if i == 0:
-                mask_input = torch.ones(1, in_channels, 1, 1, device=vector.device)  # [1, 3, 1, 1] برای RGB
+                mask_input = torch.ones(1, in_channels, 1, 1, device=vector.device)
             else:
-                # برش برای mask_input از بخش قبلی vector
-                input_start = start - in_channels if i > 0 else 0
-                mask_input = vector[input_start:start].unsqueeze(0).unsqueeze(-1).unsqueeze(-1)  # [1, in_channels, 1, 1]
-            
+                mask_input = vector[start-out_channels:start].unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
             item_list.append(mask_output)
             item_list.append(mask_input)
             mask_list.append(item_list)
-            
-            # به‌روزرسانی start
             start = end
-            
-            # لاگ برای دیباگ
             print(f"Layer {i}: mask_out shape {mask_output.shape}, mask_in shape {mask_input.shape}, out_channels {out_channels}, in_channels {in_channels}")
         return mask_list
-        
     def vector2mask_resnetbb(self, inputs):
         vector = self.transform_output(inputs)
         mask_list = []
