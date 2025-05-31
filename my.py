@@ -108,7 +108,7 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
 
     cfg.trainer = "default_cls"
     cfg.pretrained = None
-
+    # Loss and Optimizer
     criterion = nn.CrossEntropyLoss()
     params_group = net_utils.group_weight(hyper_net)
     optimizer_hyper = torch.optim.AdamW(params_group, lr=1e-3, weight_decay=1e-2)
@@ -120,7 +120,6 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
     scheduler = net_utils.GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=5, after_scheduler=base_scheduler)
 
     
-    print(f"cfg.data: {cfg.data}")
     train_loader, val_loader = load_dataset(name=cfg.set, root=cfg.data, path=cfg.data, sample='default', batch_size=cfg.batch_size)
     # Create validation subset for HyperNet
     ratio = (len(train_loader.dataset) / cfg.hyper_step) / len(train_loader.dataset)
@@ -177,8 +176,6 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
                 masks = hyper_net.vector2mask(cur_mask_vec)
                 #print(f"masks type: {type(masks)}, content: {masks}")
                 print(f"masks[0] shape: {masks[0][0].shape}, sample: {masks[0][0]}")
-                # for idx, mask_sublist in enumerate(masks):
-                #     print(f"Mask {idx} shape: {[m.shape for m in mask_sublist]}, sample: {mask_sublist[0]}")
                 model = reparameterize_non_sparse(cfg, model, masks)
 
     if cfg.save_model:
