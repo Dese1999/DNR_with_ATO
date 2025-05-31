@@ -16,8 +16,11 @@ from packaging import version
 import torch.utils.data
 # ATO and DNR Utility Functions
 
-def display_structure(all_parameters, p_flag=False):
-    """Display the sparsity of the model's parameters."""
+import os
+from datetime import datetime
+
+def display_structure(all_parameters, p_flag=False, log_file=None):
+    """Display the sparsity of the model's parameters and save to a log file."""
     layer_sparsity = []
     num_layers = 0
     
@@ -40,31 +43,49 @@ def display_structure(all_parameters, p_flag=False):
             sparsity = current_parameter.sum().item() / current_parameter.nelement()
             layer_sparsity.append(sparsity)
 
-    print_string = ''
+    log_string = ''
     for i in range(num_layers):
-        print_string += 'l-%d s-%.3f ' % (i + 1, layer_sparsity[i])
-    print(print_string.strip())
-def display_structure_hyper(vectors):
-    """Display the sparsity of each layer's mask vector in DNR."""
+        log_string += 'l-%d s-%.3f ' % (i + 1, layer_sparsity[i])
+    
+    # Save to log file if provided, otherwise print
+    if log_file:
+        with open(log_file, 'a') as f:
+            f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Structure: {log_string.strip()}\n")
+    else:
+        print(log_string.strip())
+
+def display_structure_hyper(vectors, log_file=None):
+    """Display the sparsity of each layer's mask vector in DNR and save to a log file."""
     num_layers = len(vectors)
     layer_sparsity = []
     for i in range(num_layers):
         current_parameter = vectors[i].cpu().data
         if i == 0:
-            if current_parameter.dim() > 0:  # بررسی اینکه تنسور حداقل یک‌بعدی باشد
-                print(f"Layer 1 mask sample: {current_parameter[:5]}")
+            sample = current_parameter[:5] if current_parameter.dim() > 0 else current_parameter.item()
+            sample_str = f"Layer 1 mask sample: {sample} {'(scalar)' if current_parameter.dim() == 0 else ''}"
+            # Save sample to log file
+            if log_file:
+                with open(log_file, 'a') as f:
+                    f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {sample_str}\n")
             else:
-                print(f"Layer 1 mask sample: {current_parameter.item()} (scalar)")
-        sparsity = current_parameter.sum().item() / max(1, current_parameter.numel())  # 
-    
+                print(sample_str)
+        
+        sparsity = current_parameter.sum().item() / max(1, current_parameter.numel())
         layer_sparsity.append(sparsity)
     
-    print_string = ''
+    log_string = ''
     return_string = ''
     for i in range(num_layers):
-        print_string += f'l-{i+1} s-{layer_sparsity[i]:.3f} '
+        log_string += f'l-{i+1} s-{layer_sparsity[i]:.3f} '
         return_string += f'{layer_sparsity[i]:.3f} '
-    print(print_string.strip())
+    
+    # Save to log file if provided, otherwise print
+    if log_file:
+        with open(log_file, 'a') as f:
+            f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Structure Hyper: {log_string.strip()}\n")
+    else:
+        print(log_string.strip())
+    
     return return_string.strip()
     
 def group_weight(module, weight_norm=True):
