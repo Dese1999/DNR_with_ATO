@@ -134,6 +134,10 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
     
     epoch_metrics = {"train_acc1": [], "train_acc5": [], "train_loss": [], "test_acc1": [], "test_acc5": [], "test_loss": [], "avg_sparsity": [], "mask_update": []}
     #print(f"masks type: {type(masks)}, len: {len(masks)}, sample: {masks[0] if masks else None}")
+    masks = hyper_net.vector2mask(vector)
+    print(f"Masks structure: {[len(m) for m in masks]}")
+    for idx, mask_sublist in enumerate(masks):
+        print(f"Mask {idx} shapes: {[m.shape for m in mask_sublist]}, sample: {mask_sublist[0][:5]}")
     for epoch in range(cfg.epochs):
         train_acc1, train_acc5, train_loss, cur_mask_vec = soft_train(
             train_loader, model, hyper_net, criterion, val_loader_gate, 
