@@ -54,6 +54,7 @@ class HyperStructure(nn.Module):
         self.bn1 = nn.LayerNorm([128 * 2])  
         self.T = T
         self.structure = structure
+        print("Received structure:", structure)
         self.Bi_GRU = nn.GRU(64, 128, bidirectional=True)
         self.h0 = torch.zeros(2, 1, 128)
         self.inputs = nn.Parameter(torch.Tensor(len(structure), 1, 64))
