@@ -53,25 +53,59 @@ def get_datasets_dir(dataset_name):
     datasets_dir = '{}/{}'.format(datasets_dir, dataset_dir)
 
     return datasets_dir
+####
 
-
-
-def get_directories(args,generation):
-    # if args.config_file is None or args.name is None:
+def get_directories(args, generation):
     if args.config_file is None and args.name is None:
         raise ValueError("Must have name and config")
 
-    # config = pathlib.Path(args.config_file).stem
     config = args.name
     rno = random.randint(0, 1000000)
     if args.log_dir is None:
-        run_base_dir = pathlib.Path(
-                f"{get_checkpoint_dir()}/{args.name}/gen_{generation}/{rno}"
-            )
+        run_base_dir = pathlib.Path(f"{get_checkpoint_dir()}/{args.name}/gen_{generation}/{rno}")
     else:
-        run_base_dir = pathlib.Path(
-                f"{args.log_dir}/{args.name}/gen_{generation}/{rno}"
-            )
+        run_base_dir = pathlib.Path(f"{args.log_dir}/{args.name}/gen_{generation}/{rno}")
+
+    def _run_dir_exists(run_base_dir):
+        log_base_dir = run_base_dir / "logs"
+        ckpt_base_dir = run_base_dir / "checkpoints"
+        return log_base_dir.exists() or ckpt_base_dir.exists()
+
+    rep_count = 0
+    while _run_dir_exists(run_base_dir / f'{rep_count:04d}_g{args.gpu:01d}'):
+        rep_count += 1
+
+    run_base_dir = run_base_dir / f'{rep_count:04d}_g{args.gpu:01d}'
+    log_base_dir = run_base_dir / "logs"
+    ckpt_base_dir = run_base_dir / "checkpoints"
+
+    # Create directories
+    run_base_dir.mkdir(parents=True, exist_ok=True)
+    log_base_dir.mkdir(parents=True, exist_ok=True)
+    ckpt_base_dir.mkdir(parents=True, exist_ok=True)
+
+    (run_base_dir / "settings.txt").write_text(str(args))
+    return run_base_dir, ckpt_base_dir, log_base_dir
+
+
+
+###
+# def get_directories(args,generation):
+#     # if args.config_file is None or args.name is None:
+#     if args.config_file is None and args.name is None:
+#         raise ValueError("Must have name and config")
+
+#     # config = pathlib.Path(args.config_file).stem
+#     config = args.name
+#     rno = random.randint(0, 1000000)
+#     if args.log_dir is None:
+#         run_base_dir = pathlib.Path(
+#                 f"{get_checkpoint_dir()}/{args.name}/gen_{generation}/{rno}"
+#             )
+#     else:
+#         run_base_dir = pathlib.Path(
+#                 f"{args.log_dir}/{args.name}/gen_{generation}/{rno}"
+#             )
     
         
     def _run_dir_exists(run_base_dir):
