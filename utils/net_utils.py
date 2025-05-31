@@ -219,9 +219,8 @@ def save_checkpoint(state, is_best, filename="checkpoint.pth", save=True):
     torch.save(state, filename)
     if is_best and save:
         shutil.copyfile(filename, filename.parent / "model_best.pth")
-import torch
-import math
-import torch.nn as nn
+
+
 
 def reparameterize_non_sparse(cfg, net, net_sparse_set):
     device = cfg.device if hasattr(cfg, 'device') else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
