@@ -222,6 +222,10 @@ def save_checkpoint(state, is_best, filename="checkpoint.pth", save=True):
 
 
 
+import torch
+import torch.nn as nn
+import math
+
 def reparameterize_non_sparse(cfg, net, net_sparse_set):
     device = cfg.device if hasattr(cfg, 'device') else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     mask_idx = 0
@@ -243,29 +247,44 @@ def reparameterize_non_sparse(cfg, net, net_sparse_set):
             if mask_idx < len(mask_list):
                 mask_out = mask_list[mask_idx][0]  # mask_output
                 mask_in = mask_list[mask_idx][1] if len(mask_list[mask_idx]) > 1 else torch.ones(1, expected_in_channels, 1, 1, device=device)
+                
                 if isinstance(mask_out, torch.Tensor) and isinstance(mask_in, torch.Tensor):
-                    # هماهنگی mask_out
-                    if mask_out.numel() != expected_out_channels:
-                        print(f"Warning: Mask_out {mask_idx} size {mask_out.numel()} does not match output channels {expected_out_channels} for {name}")
-                        if mask_out.numel() > expected_out_channels:
-                            mask_out = mask_out[:expected_out_channels]
-                        else:
-                            # تولید تنسور 4‌بعدی برای پر کردن
-                            padding = torch.ones(expected_out_channels - mask_out.numel(), 1, 1, 1, device=mask_out.device)
-                            mask_out = torch.cat([mask_out, padding], dim=0)
-                    mask_out = mask_out.to(device).view(-1, 1, 1, 1).expand_as(param.data)
-                    # هماهنگی mask_in
-                    if mask_in.numel() != expected_in_channels:
-                        print(f"Warning: Mask_in {mask_idx} size {mask_in.numel()} does not match input channels {expected_in_channels} for {name}")
-                        if name == 'conv1.weight':  # برای conv1
-                            mask_in = torch.ones(1, expected_in_channels, 1, 1, device=device)  # ماسک پیش‌فرض برای RGB
-                        else:
-                            if mask_in.numel() > expected_in_channels:
-                                mask_in = mask_in[:, :expected_in_channels]
+                    if 'fc' in name:  # Handle fc layer separately
+                        # هماهنگی mask_out برای fc
+                        if mask_out.numel() != expected_out_channels:
+                            print(f"Warning: Mask_out {mask_idx} size {mask_out.numel()} does not match output channels {expected_out_channels} for {name}")
+                            if mask_out.numel() > expected_out_channels:
+                                mask_out = mask_out[:expected_out_channels]
                             else:
-                                padding = torch.ones(1, expected_in_channels - mask_in.numel(), 1, 1, device=mask_in.device)
-                                mask_in = torch.cat([mask_in, padding], dim=1)
-                    mask_in = mask_in.to(device).view(1, -1, 1, 1).expand_as(param.data)
+                                padding = torch.ones(expected_out_channels - mask_out.numel(), device=mask_out.device)
+                                mask_out = torch.cat([mask_out.squeeze(), padding], dim=0)
+                        mask_out = mask_out.to(device).squeeze()  # [10]
+                        mask_out = mask_out.view(-1, 1).expand_as(param.data)  # [10, 512]
+                        mask_in = torch.ones_like(param.data, device=device)  # No input mask for fc: [10, 512]
+                    else:  # Handle convolutional layers
+                        # هماهنگی mask_out
+                        if mask_out.numel() != expected_out_channels:
+                            print(f"Warning: Mask_out {mask_idx} size {mask_out.numel()} does not match output channels {expected_out_channels} for {name}")
+                            if mask_out.numel() > expected_out_channels:
+                                mask_out = mask_out[:expected_out_channels]
+                            else:
+                                padding = torch.ones(expected_out_channels - mask_out.numel(), 1, 1, 1, device=mask_out.device)
+                                mask_out = torch.cat([mask_out, padding], dim=0)
+                        mask_out = mask_out.to(device).view(-1, 1, 1, 1).expand_as(param.data)
+                        
+                        # هماهنگی mask_in
+                        if mask_in.numel() != expected_in_channels:
+                            print(f"Warning: Mask_in {mask_idx} size {mask_in.numel()} does not match input channels {expected_in_channels} for {name}")
+                            if name == 'conv1.weight':  # برای conv1
+                                mask_in = torch.ones(1, expected_in_channels, 1, 1, device=device)  # ماسک پیش‌فرض برای RGB
+                            else:
+                                if mask_in.numel() > expected_in_channels:
+                                    mask_in = mask_in[:, :expected_in_channels]
+                                else:
+                                    padding = torch.ones(1, expected_in_channels - mask_in.numel(), 1, 1, device=mask_in.device)
+                                    mask_in = torch.cat([mask_in, padding], dim=1)
+                        mask_in = mask_in.to(device).view(1, -1, 1, 1).expand_as(param.data)
+                    
                     # اعمال ماسک
                     mask_binary = (mask_out * mask_in == 0).float()
                     re_init_param = torch.empty(param.data.shape, device=device)
@@ -281,7 +300,6 @@ def reparameterize_non_sparse(cfg, net, net_sparse_set):
                 mask_binary = torch.zeros_like(param.data, device=device)
                 param.data = param.data
     return net
-    
 def re_init_weights(shape, device, reinint_method='kaiming'):
     """Re-initialize weights using the specified method."""
     mask = torch.empty(shape, requires_grad=False, device=device)
