@@ -151,7 +151,7 @@ class Bottleneck(nn.Module):
         return out
 
 class ResNet(nn.Module):
-    def __init__(self, block, layers, num_classes=1000, zero_init_residual=False,
+    def __init__(self, block, layers, num_classes=10, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
                  norm_layer=None, cfg=None, num_gate=2):
         super(ResNet, self).__init__()
@@ -174,10 +174,11 @@ class ResNet(nn.Module):
             raise ValueError("replace_stride_with_dilation should be None or a 3-element tuple, got {}".format(replace_stride_with_dilation))
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        #self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.maxpool = nn.Identity()
         self.num_gate = num_gate
 
         if cfg is None:
@@ -290,22 +291,34 @@ class ResNet(nn.Module):
             structure.append(self.conv1.out_channels)
             print(f"Added conv1 with width: {self.conv1.out_channels}")
         for name, module in self.named_modules():
-            if isinstance(module, nn.Conv2d) and 'downsample' not in name:
+            if isinstance(module, nn.Conv2d) and 'downsample' not in name and 'conv1' not in name:
                 structure.append(module.out_channels)
                 print(f"Found conv layer {name} with width: {module.out_channels}")
-        if len(structure) != 18:
-            print(f"Warning: Expected 18 conv layers, got {len(structure)}")
-        return sum(structure) // len(structure), structure
+        if len(structure) != 17:  # Expect 17 conv layers for ResNet-18
+            print(f"Warning: Expected 17 conv layers, got {len(structure)}")
+        return structure  # Return structure directly
+    # def set_vritual_gate(self, arch_vector):
+    #     i = 0
+    #     start = 0
+    #     for m in self.modules():
+    #         if isinstance(m, virtual_gate):
+    #             end = start + self.structure[i]
+    #             m.gate_f = arch_vector.squeeze()[start:end].to(m.gate_f.device)
+    #             start = end
+    #             i += 1
 
-    def set_vritual_gate(self, arch_vector):
-        i = 0
+    def set_virtual_gate(self, arch_vector):
         start = 0
-        for m in self.modules():
+        for i, m in enumerate(self.modules()):
             if isinstance(m, virtual_gate):
-                end = start + self.structure[i]
+                width = m.width  # Use width from virtual_gate
+                end = start + width
+                if end > len(arch_vector.squeeze()):
+                    print(f"Error: arch_vector too short. Expected at least {end}, got {len(arch_vector.squeeze())}")
+                    return
                 m.gate_f = arch_vector.squeeze()[start:end].to(m.gate_f.device)
                 start = end
-                i += 1
+                print(f"Set gate {i} with width {width}, vector slice [{start-width}:{start}]")
 
     def reset_gates(self):
         for m in self.modules():
