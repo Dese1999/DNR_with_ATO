@@ -145,7 +145,7 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
 
         with torch.no_grad():
             hyper_net.eval()
-            sparsity_str = display_structure_hyper(cur_mask_vec)
+            sparsity_str = display_structure_hyper(cur_mask_vec, log_file="sparsity_log.txt")
             sparsity_values = [float(s) for s in sparsity_str.split() if s.replace(".", "").isdigit()]
             avg_sparsity = sum(sparsity_values) / len(sparsity_values) if sparsity_values else 0
             masks = hyper_net.vector2mask(cur_mask_vec)
