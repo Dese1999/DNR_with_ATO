@@ -271,7 +271,6 @@ class ResNet(nn.Module):
         for m in self.modules():
             if isinstance(m, virtual_gate):
                 structure.append(m.width)
-                print(f"Found virtual_gate with width: {m.width}")  # خط دیباگ
         if not structure:
             raise ValueError("No virtual_gate layers found in the model. Check the model architecture or ensure virtual_gate layers are added.")
         self.structure = structure
