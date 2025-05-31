@@ -119,22 +119,47 @@ class HyperStructure(nn.Module):
     #         mask_list.append(item_list)
     #     return mask_list
     def vector2mask_resnet(self, inputs):
-        vector = self.transform_output(inputs)
+        vector = self.transform_output(inputs)  # [sum(structure)]، مثلاً [3328]
         mask_list = []
-        if len(vector) != len(self.structure):
-            print(f"Error: Vector length {len(vector)} does not match structure length {len(self.structure)}")
+        start = 0
+        
+        # بررسی طول بردار
+        total_channels = sum(self.structure)  # مثلاً 3328
+        if len(vector) < total_channels:
+            print(f"Error: Vector length {len(vector)} is less than required {total_channels}")
             return []
-        for i in range(len(vector)):
+        
+        for i in range(len(self.structure)):
             item_list = []
-            mask_output = vector[i].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)  # [width, 1, 1, 1]
-            # mask_input با تعداد کانال‌های ورودی لایه قبلی
-            in_channels = 3 if i == 0 else self.structure[i-1]  # برای conv1: 3، بقیه: خروجی لایه قبلی
-            mask_input = vector[i][:in_channels].unsqueeze(0).unsqueeze(-1).unsqueeze(-1)  # [1, in_channels, 1, 1]
+            out_channels = self.structure[i]  # تعداد کانال‌های خروجی لایه فعلی، مثلاً 64 برای conv1
+            in_channels = 3 if i == 0 else self.structure[i-1]  # کانال‌های ورودی: 3 برای conv1، یا خروجی لایه قبلی
+            
+            # برش vector برای mask_output
+            end = start + out_channels
+            if end > len(vector):
+                print(f"Error: Not enough values for layer {i}. Expected {end}, got {len(vector)}")
+                return mask_list
+            mask_output = vector[start:end].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)  # [out_channels, 1, 1, 1]
+            
+            # mask_input برای conv1 به صورت ثابت (همه 1) یا از vector
+            if i == 0:
+                mask_input = torch.ones(1, in_channels, 1, 1, device=vector.device)  # [1, 3, 1, 1] برای RGB
+            else:
+                # برش برای mask_input از بخش قبلی vector
+                input_start = start - in_channels if i > 0 else 0
+                mask_input = vector[input_start:start].unsqueeze(0).unsqueeze(-1).unsqueeze(-1)  # [1, in_channels, 1, 1]
+            
             item_list.append(mask_output)
             item_list.append(mask_input)
             mask_list.append(item_list)
+            
+            # به‌روزرسانی start
+            start = end
+            
+            # لاگ برای دیباگ
+            print(f"Layer {i}: mask_out shape {mask_output.shape}, mask_in shape {mask_input.shape}, out_channels {out_channels}, in_channels {in_channels}")
         return mask_list
-
+        
     def vector2mask_resnetbb(self, inputs):
         vector = self.transform_output(inputs)
         mask_list = []
