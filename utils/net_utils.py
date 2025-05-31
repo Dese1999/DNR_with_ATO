@@ -170,10 +170,10 @@ def group_weight(module, weight_norm=True):
     decay_params = sum(p.numel() for p in group_decay)
     no_decay_params = sum(p.numel() for p in group_no_decay)
     ## Debug to be sure
-    print("Total params:", total_params)
-    print("Decay params:", decay_params)
-    print("No decay params:", no_decay_params)
-    print("Sum of grouped params:", decay_params + no_decay_params)
+    # print("Total params:", total_params)
+    # print("Decay params:", decay_params)
+    # print("No decay params:", no_decay_params)
+    # print("Sum of grouped params:", decay_params + no_decay_params)
 
     assert total_params == decay_params + no_decay_params, "Parameter grouping mismatch!"
 
@@ -182,6 +182,7 @@ def group_weight(module, weight_norm=True):
         dict(params=group_no_decay, weight_decay=0.0)
     ]
     return groups
+    
 def create_dense_mask_0(net, device, value):
     """Create a dense mask with all values set to the specified value."""
     for param in net.parameters():
@@ -224,6 +225,10 @@ import numpy as np
 import torch
 import numpy as np
 
+import torch
+import math
+import torch.nn as nn
+
 def reparameterize_non_sparse(cfg, net, net_sparse_set):
     device = cfg.device if hasattr(cfg, 'device') else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     mask_idx = 0
@@ -232,34 +237,31 @@ def reparameterize_non_sparse(cfg, net, net_sparse_set):
     for name, param in net.named_parameters():
         if 'weight' in name and 'bn' not in name and 'downsample' not in name:
             if mask_idx < len(mask_list):
-                mask_param = mask_list[mask_idx]
-                if isinstance(mask_param, list):
-                    mask_param = mask_param[0] if mask_param else torch.ones_like(param.data)
-                    if isinstance(mask_param, torch.Tensor):
-                        # Expand channel-wise mask to match weight shape
-                        if mask_param.shape[0] == param.data.shape[0]:  # Check if mask is channel-wise
-                            mask_param = mask_param.to(device).view(-1, 1, 1, 1)  # [64, 1, 1, 1]
-                            mask_param = mask_param.expand_as(param.data)  # [64, 3, 7, 7]
+                mask_param = mask_list[mask_idx][0]  #  mask_output
+                if isinstance(mask_param, torch.Tensor):
+                    expected_channels = param.data.shape[0]  # out channel  
+                    if mask_param.numel() != expected_channels:
+                        print(f"Warning: Mask {mask_idx} size {mask_param.numel()} does not match output channels {expected_channels} for {name}")
+                        if mask_param.numel() > expected_channels:
+                            mask_param = mask_param[:expected_channels]
                         else:
-                            mask_param = mask_param.to(device).view(param.data.shape)
-                    else:
-                        raise ValueError(f"Invalid mask type: {type(mask_param)} at index {mask_idx}")
-                elif isinstance(mask_param, torch.Tensor):
-                    if mask_param.shape[0] == param.data.shape[0]:
-                        mask_param = mask_param.to(device).view(-1, 1, 1, 1)
-                        mask_param = mask_param.expand_as(param.data)
-                    else:
-                        mask_param = mask_param.to(device).view(param.data.shape)
+                            mask_param = torch.cat([mask_param, torch.ones(expected_channels - mask_param.numel(), device=mask_param.device)])
+                    mask_param = mask_param.to(device).view(-1, 1, 1, 1)  # [N, 1, 1, 1]
+                    mask_param = mask_param.expand_as(param.data)  # [N, in_channels, k, k]
+                    
+                    # Reset weights with zero mask
+                    re_init_param = torch.empty(param.data.shape, device=device)
+                    nn.init.kaiming_uniform_(re_init_param, a=math.sqrt(5))
+                    # Only weights with a zero mask are reset
+                    mask_binary = (mask_param == 0).float()  # 
+                    param.data = param.data * (1 - mask_binary) + re_init_param * mask_binary
                 else:
                     raise ValueError(f"Invalid mask type: {type(mask_param)} at index {mask_idx}")
-                
-                re_init_param = torch.empty(param.data.shape, device=device)
-                nn.init.kaiming_uniform_(re_init_param, a=math.sqrt(5))
-                param.data[mask_param == 0] = re_init_param.data[mask_param == 0]
                 mask_idx += 1
             else:
                 raise ValueError("Not enough masks in net_sparse_set!")
     return net
+    
 def re_init_weights(shape, device, reinint_method='kaiming'):
     """Re-initialize weights using the specified method."""
     mask = torch.empty(shape, requires_grad=False, device=device)
