@@ -114,7 +114,7 @@ class HyperStructure(nn.Module):
             mask_output = vector[i].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
             mask_input = vector[i].unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
             item_list.append(mask_output)
-            #item_list.append(mask_input)
+            item_list.append(mask_input)
             mask_list.append(item_list)
         return mask_list
 
