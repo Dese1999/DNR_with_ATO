@@ -97,7 +97,10 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
 
     if hyper_net is None:
         width, structure = model.count_structure()
-        print(f"Structure from count_structure: {structure}")  # خط دیباگ
+        print(f"Structure from count_structure: {structure}")  # Debug structure
+        # Debug: Count weight layers
+        weight_layers = [name for name, _ in model.named_parameters() if 'weight' in name and 'bn' not in name and 'downsample' not in name]
+        print(f"Number of weight layers in model: {len(weight_layers)}")
         hyper_net = HyperStructure(structure=structure, T=cfg.hyper_t, base=cfg.hyper_base, args=cfg)
         hyper_net = hyper_net.cuda()
 
