@@ -267,37 +267,29 @@ class ResNet(nn.Module):
         x = self.fc(x)
         return x
         
+    def count_structure(self):
+    structure = []
+    if hasattr(self, 'conv1') and hasattr(self.conv1, 'out_channels'):
+        structure.append(self.conv1.out_channels)
+    for name, module in self.named_modules():
+        if isinstance(module, nn.Conv2d) and 'downsample' not in name and name != 'conv1':
+            structure.append(module.out_channels)
+    width = sum(structure) // len(structure) if structure else 0
+    return width, structure
+    
     # def count_structure(self):
     #     structure = []
-    #     for m in self.modules():
-    #         if isinstance(m, virtual_gate):
-    #             structure.append(m.width)
-    #     if not structure:
-    #         raise ValueError("No virtual_gate layers found in the model. Check the model architecture or ensure virtual_gate layers are added.")
-    #     self.structure = structure
-    #     return sum(structure), structure
-    # def count_structure(self):
-    # structure = []
-    # if hasattr(self, 'conv1') and hasattr(self.conv1, 'out_channels'):
-    #     structure.append(self.conv1.out_channels)  # اضافه کردن conv1
-    # for name, module in self.named_modules():
-    #     if hasattr(module, 'virtual_gate') and module.virtual_gate is not None:
-    #         print(f"Found virtual_gate with width: {module.virtual_gate.width}")
-    #         structure.append(module.virtual_gate.width)
-    # return sum(structure) // len(structure), structure
-    def count_structure(self):
-        structure = []
-        if hasattr(self, 'conv1') and hasattr(self.conv1, 'out_channels'):
-            structure.append(self.conv1.out_channels)
-            print(f"Added conv1 with width: {self.conv1.out_channels}")
-        for name, module in self.named_modules():
-            if isinstance(module, nn.Conv2d) and 'downsample' not in name and name != 'conv1':
-                structure.append(module.out_channels)
-                print(f"Found conv layer {name} with width: {module.out_channels}")
-        if len(structure) != 17:  
-            print(f"Warning: Expected 17 conv layers, got {len(structure)}")
-        width = sum(structure) // len(structure) if structure else 0 
-        return width, structure
+    #     if hasattr(self, 'conv1') and hasattr(self.conv1, 'out_channels'):
+    #         structure.append(self.conv1.out_channels)
+    #         print(f"Added conv1 with width: {self.conv1.out_channels}")
+    #     for name, module in self.named_modules():
+    #         if isinstance(module, nn.Conv2d) and 'downsample' not in name and name != 'conv1':
+    #             structure.append(module.out_channels)
+    #             print(f"Found conv layer {name} with width: {module.out_channels}")
+    #     if len(structure) != 17:  
+    #         print(f"Warning: Expected 17 conv layers, got {len(structure)}")
+    #     width = sum(structure) // len(structure) if structure else 0 
+    #     return width, structure
     # def set_vritual_gate(self, arch_vector):
     #     i = 0
     #     start = 0
