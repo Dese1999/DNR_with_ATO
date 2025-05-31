@@ -317,7 +317,7 @@ class ResNet(nn.Module):
         for m in self.modules():
             if isinstance(m, virtual_gate):
                 m.reset_value()
-     return self.get_weights_bottleneck()
+         return self.get_weights_bottleneck()
 
     def get_weights(self):
         if self.block_string == 'BasicBlock':
