@@ -107,13 +107,29 @@ class HyperStructure(nn.Module):
         out = hard_concrete(out, device=device)
         return out.squeeze()
 
+    # def vector2mask_resnet(self, inputs):
+    #     vector = self.transform_output(inputs)
+    #     mask_list = []
+    #     for i in range(len(vector)):
+    #         item_list = []
+    #         mask_output = vector[i].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+    #         mask_input = vector[i].unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+    #         item_list.append(mask_output)
+    #         item_list.append(mask_input)
+    #         mask_list.append(item_list)
+    #     return mask_list
     def vector2mask_resnet(self, inputs):
         vector = self.transform_output(inputs)
         mask_list = []
+        if len(vector) != len(self.structure):
+            print(f"Error: Vector length {len(vector)} does not match structure length {len(self.structure)}")
+            return []
         for i in range(len(vector)):
             item_list = []
-            mask_output = vector[i].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-            mask_input = vector[i].unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+            mask_output = vector[i].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)  # [width, 1, 1, 1]
+            # mask_input با تعداد کانال‌های ورودی لایه قبلی
+            in_channels = 3 if i == 0 else self.structure[i-1]  # برای conv1: 3، بقیه: خروجی لایه قبلی
+            mask_input = vector[i][:in_channels].unsqueeze(0).unsqueeze(-1).unsqueeze(-1)  # [1, in_channels, 1, 1]
             item_list.append(mask_output)
             item_list.append(mask_input)
             mask_list.append(item_list)
