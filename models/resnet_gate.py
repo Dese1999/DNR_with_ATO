@@ -266,15 +266,24 @@ class ResNet(nn.Module):
         x = self.fc(x)
         return x
         
+    # def count_structure(self):
+    #     structure = []
+    #     for m in self.modules():
+    #         if isinstance(m, virtual_gate):
+    #             structure.append(m.width)
+    #     if not structure:
+    #         raise ValueError("No virtual_gate layers found in the model. Check the model architecture or ensure virtual_gate layers are added.")
+    #     self.structure = structure
+    #     return sum(structure), structure
     def count_structure(self):
-        structure = []
-        for m in self.modules():
-            if isinstance(m, virtual_gate):
-                structure.append(m.width)
-        if not structure:
-            raise ValueError("No virtual_gate layers found in the model. Check the model architecture or ensure virtual_gate layers are added.")
-        self.structure = structure
-        return sum(structure), structure
+    structure = []
+    if hasattr(self, 'conv1') and hasattr(self.conv1, 'out_channels'):
+        structure.append(self.conv1.out_channels)  # اضافه کردن conv1
+    for name, module in self.named_modules():
+        if hasattr(module, 'virtual_gate') and module.virtual_gate is not None:
+            print(f"Found virtual_gate with width: {module.virtual_gate.width}")
+            structure.append(module.virtual_gate.width)
+    return sum(structure) // len(structure), structure
 
     def set_vritual_gate(self, arch_vector):
         i = 0
