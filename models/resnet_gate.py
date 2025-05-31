@@ -291,12 +291,12 @@ class ResNet(nn.Module):
             structure.append(self.conv1.out_channels)
             print(f"Added conv1 with width: {self.conv1.out_channels}")
         for name, module in self.named_modules():
-            if isinstance(module, nn.Conv2d) and 'downsample' not in name:
+            if isinstance(module, nn.Conv2d) and 'downsample' not in name and name != 'conv1':
                 structure.append(module.out_channels)
                 print(f"Found conv layer {name} with width: {module.out_channels}")
-        if len(structure) != 17:  # انتظار 17 لایه برای ResNet-18
+        if len(structure) != 17:  
             print(f"Warning: Expected 17 conv layers, got {len(structure)}")
-        width = sum(structure) // len(structure) if structure else 0  # میانگین کانال‌ها
+        width = sum(structure) // len(structure) if structure else 0 
         return width, structure
     # def set_vritual_gate(self, arch_vector):
     #     i = 0
