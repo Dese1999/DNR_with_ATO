@@ -88,7 +88,7 @@ class HyperStructure(nn.Module):
         out = gumbel_softmax_sample(out, T=self.T, offset=self.base, device=device)
         if not self.training_mode:
             out = hard_concrete(out, device=device)
-        print(f"HyperStructure forward output shape: {out.shape}, expected length: {sum(self.structure)}")
+        #print(f"HyperStructure forward output shape: {out.shape}, expected length: {sum(self.structure)}")
         return out
 
     # def transform_output(self, inputs):
