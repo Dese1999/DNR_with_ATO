@@ -335,9 +335,38 @@ class SelectionBasedRegularization(nn.Module):
             m_out, m_in = masks[i]
             m_out = custom_STE.apply(m_out)
             m_in = custom_STE.apply(m_in)
+    
+            # دیباگ
+            print(f"Layer {i}: w_up shape {w_up.shape}, m_out shape {m_out.shape}, w_low shape {w_low.shape}, m_in shape {m_in.shape}")
+    
+            # هماهنگی m_out با کانال‌های خروجی
+            expected_out_channels = w_up.shape[0]
+            if m_out.shape[0] != expected_out_channels:
+                print(f"Warning: m_out size {m_out.shape[0]} does not match output channels {expected_out_channels} for layer {i}")
+                if m_out.shape[0] > expected_out_channels:
+                    m_out = m_out[:expected_out_channels]
+                else:
+                    padding = torch.ones(expected_out_channels - m_out.shape[0], 1, 1, 1, device=m_out.device)
+                    m_out = torch.cat([m_out, padding], dim=0)
+    
+            # هماهنگی m_in با کانال‌های ورودی
+            expected_in_channels = w_low.shape[1]
+            if m_in.shape[1] != expected_in_channels:
+                print(f"Warning: m_in size {m_in.shape[1]} does not match input channels {expected_in_channels} for layer {i}")
+                if i == 0:  # برای conv1
+                    m_in = torch.ones(1, expected_in_channels, 1, 1, device=m_in.device)  # 3 کانال برای RGB
+                else:
+                    if m_in.shape[1] > expected_in_channels:
+                        m_in = m_in[:, :expected_in_channels]
+                    else:
+                        padding = torch.ones(1, expected_in_channels - m_in.shape[1], 1, 1, device=m_in.device)
+                        m_in = torch.cat([m_in, padding], dim=1)
+    
+            # محاسبه Group Lasso Loss
             gl_loss = (w_up * (1 - m_out)).pow(2).sum((1, 2, 3)).add(1e-8).pow(0.5).sum() + \
                       (w_low * (1 - m_in)).pow(2).sum((0, 2, 3)).add(1e-8).pow(0.5).sum()
             gl_list.append(gl_loss)
+    
         sum_loss = self.lam * sum(gl_list) / len(gl_list)
         if self.use_fim:
             fim_loss = self.compute_fim(weights, masks)
