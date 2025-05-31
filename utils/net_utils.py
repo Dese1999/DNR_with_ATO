@@ -229,6 +229,10 @@ import torch
 import math
 import torch.nn as nn
 
+import torch
+import math
+import torch.nn as nn
+
 def reparameterize_non_sparse(cfg, net, net_sparse_set):
     device = cfg.device if hasattr(cfg, 'device') else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     mask_idx = 0
@@ -237,26 +241,34 @@ def reparameterize_non_sparse(cfg, net, net_sparse_set):
     for name, param in net.named_parameters():
         if 'weight' in name and 'bn' not in name and 'downsample' not in name:
             if mask_idx < len(mask_list):
-                mask_param = mask_list[mask_idx][0]  #  mask_output
-                if isinstance(mask_param, torch.Tensor):
-                    expected_channels = param.data.shape[0]  # out channel  
-                    if mask_param.numel() != expected_channels:
-                        print(f"Warning: Mask {mask_idx} size {mask_param.numel()} does not match output channels {expected_channels} for {name}")
-                        if mask_param.numel() > expected_channels:
-                            mask_param = mask_param[:expected_channels]
+                mask_out = mask_list[mask_idx][0]  # mask_output
+                mask_in = mask_list[mask_idx][1] if len(mask_list[mask_idx]) > 1 else torch.ones(1, param.data.shape[1], 1, 1, device=device)  # mask_input یا 1
+                if isinstance(mask_out, torch.Tensor) and isinstance(mask_in, torch.Tensor):
+                    expected_out_channels = param.data.shape[0]
+                    expected_in_channels = param.data.shape[1]
+                    #  mask_output
+                    if mask_out.numel() != expected_out_channels:
+                        print(f"Warning: Mask_out {mask_idx} size {mask_out.numel()} does not match output channels {expected_out_channels} for {name}")
+                        if mask_out.numel() > expected_out_channels:
+                            mask_out = mask_out[:expected_out_channels]
                         else:
-                            mask_param = torch.cat([mask_param, torch.ones(expected_channels - mask_param.numel(), device=mask_param.device)])
-                    mask_param = mask_param.to(device).view(-1, 1, 1, 1)  # [N, 1, 1, 1]
-                    mask_param = mask_param.expand_as(param.data)  # [N, in_channels, k, k]
-                    
-                    # Reset weights with zero mask
+                            mask_out = torch.cat([mask_out, torch.ones(expected_out_channels - mask_out.numel(), device=mask_out.device)])
+                    mask_out = mask_out.to(device).view(-1, 1, 1, 1).expand_as(param.data)
+                    #  mask_input
+                    if mask_in.numel() != expected_in_channels:
+                        print(f"Warning: Mask_in {mask_idx} size {mask_in.numel()} does not match input channels {expected_in_channels} for {name}")
+                        if mask_in.numel() > expected_in_channels:
+                            mask_in = mask_in[:, :expected_in_channels]
+                        else:
+                            mask_in = torch.cat([mask_in, torch.ones(1, expected_in_channels - mask_in.numel(), 1, 1, device=mask_in.device)], dim=1)
+                    mask_in = mask_in.to(device).view(1, -1, 1, 1).expand_as(param.data)
+                    # 
+                    mask_binary = (mask_out * mask_in == 0).float()  # 
                     re_init_param = torch.empty(param.data.shape, device=device)
                     nn.init.kaiming_uniform_(re_init_param, a=math.sqrt(5))
-                    # Only weights with a zero mask are reset
-                    mask_binary = (mask_param == 0).float()  # 
                     param.data = param.data * (1 - mask_binary) + re_init_param * mask_binary
                 else:
-                    raise ValueError(f"Invalid mask type: {type(mask_param)} at index {mask_idx}")
+                    raise ValueError(f"Invalid mask type at index {mask_idx}")
                 mask_idx += 1
             else:
                 raise ValueError("Not enough masks in net_sparse_set!")
