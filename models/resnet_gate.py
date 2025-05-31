@@ -268,14 +268,14 @@ class ResNet(nn.Module):
         return x
         
     def count_structure(self):
-    structure = []
-    if hasattr(self, 'conv1') and hasattr(self.conv1, 'out_channels'):
-        structure.append(self.conv1.out_channels)
-    for name, module in self.named_modules():
-        if isinstance(module, nn.Conv2d) and 'downsample' not in name and name != 'conv1':
-            structure.append(module.out_channels)
-    width = sum(structure) // len(structure) if structure else 0
-    return width, structure
+        structure = []
+        if hasattr(self, 'conv1') and hasattr(self.conv1, 'out_channels'):
+            structure.append(self.conv1.out_channels)
+        for name, module in self.named_modules():
+            if isinstance(module, nn.Conv2d) and 'downsample' not in name and name != 'conv1':
+                structure.append(module.out_channels)
+        width = sum(structure) // len(structure) if structure else 0
+        return width, structure
     
     # def count_structure(self):
     #     structure = []
@@ -317,7 +317,7 @@ class ResNet(nn.Module):
         for m in self.modules():
             if isinstance(m, virtual_gate):
                 m.reset_value()
-         return self.get_weights_bottleneck()
+        return self.get_weights_bottleneck()
 
     def get_weights(self):
         if self.block_string == 'BasicBlock':
