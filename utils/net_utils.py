@@ -220,6 +220,10 @@ def save_checkpoint(state, is_best, filename="checkpoint.pth", save=True):
     if is_best and save:
         shutil.copyfile(filename, filename.parent / "model_best.pth")
 
+import torch
+import math
+import torch.nn as nn
+
 def reparameterize_non_sparse(cfg, net, net_sparse_set):
     """
     Reparameterize the model by applying masks to non-sparse weights.
@@ -234,21 +238,24 @@ def reparameterize_non_sparse(cfg, net, net_sparse_set):
     mask_idx = 0
     mask_list = net_sparse_set
 
-    # Debug: Print the number of masks and weight layers
-    weight_layers = [name for name, _ in net.named_parameters() if 'weight' in name and 'bn' not in name and 'downsample' not in name]
+    # دیباگ
+    weight_layers = [(name, param.shape) for name, param in net.named_parameters() if 'weight' in name and 'bn' not in name and 'downsample' not in name]
     print(f"Number of weight layers: {len(weight_layers)}")
+    for name, shape in weight_layers:
+        print(f"Layer {name}: {shape}")
     print(f"Number of masks: {len(mask_list)}")
-    print(f"Sample mask[0] shape: {mask_list[0][0].shape if mask_list else 'None'}")
+    if mask_list:
+        print(f"Sample mask[0] shapes: {[m.shape for m in mask_list[0]]}")
 
     for name, param in net.named_parameters():
         if 'weight' in name and 'bn' not in name and 'downsample' not in name:
+            expected_out_channels = param.data.shape[0]
+            expected_in_channels = param.data.shape[1]
             if mask_idx < len(mask_list):
                 mask_out = mask_list[mask_idx][0]  # mask_output
-                mask_in = mask_list[mask_idx][1] if len(mask_list[mask_idx]) > 1 else torch.ones(1, param.data.shape[1], 1, 1, device=device)  # mask_input or default ones
+                mask_in = mask_list[mask_idx][1] if len(mask_list[mask_idx]) > 1 else torch.ones(1, expected_in_channels, 1, 1, device=device)
                 if isinstance(mask_out, torch.Tensor) and isinstance(mask_in, torch.Tensor):
-                    expected_out_channels = param.data.shape[0]
-                    expected_in_channels = param.data.shape[1]
-                    # Adjust mask_out
+                    #  mask_out
                     if mask_out.numel() != expected_out_channels:
                         print(f"Warning: Mask_out {mask_idx} size {mask_out.numel()} does not match output channels {expected_out_channels} for {name}")
                         if mask_out.numel() > expected_out_channels:
@@ -256,7 +263,7 @@ def reparameterize_non_sparse(cfg, net, net_sparse_set):
                         else:
                             mask_out = torch.cat([mask_out, torch.ones(expected_out_channels - mask_out.numel(), device=mask_out.device)])
                     mask_out = mask_out.to(device).view(-1, 1, 1, 1).expand_as(param.data)
-                    # Adjust mask_in
+                    #  mask_in
                     if mask_in.numel() != expected_in_channels:
                         print(f"Warning: Mask_in {mask_idx} size {mask_in.numel()} does not match input channels {expected_in_channels} for {name}")
                         if mask_in.numel() > expected_in_channels:
@@ -264,23 +271,24 @@ def reparameterize_non_sparse(cfg, net, net_sparse_set):
                         else:
                             mask_in = torch.cat([mask_in, torch.ones(1, expected_in_channels - mask_in.numel(), 1, 1, device=mask_in.device)], dim=1)
                     mask_in = mask_in.to(device).view(1, -1, 1, 1).expand_as(param.data)
-                    # Apply binary mask
+                    # apply mask
                     mask_binary = (mask_out * mask_in == 0).float()
                     re_init_param = torch.empty(param.data.shape, device=device)
                     nn.init.kaiming_uniform_(re_init_param, a=math.sqrt(5))
                     param.data = param.data * (1 - mask_binary) + re_init_param * mask_binary
                 else:
-                    raise ValueError(f"Invalid mask type at index {mask_idx}")
+                    print(f"Error: Invalid mask type at index {mask_idx} for {name}")
+                    mask_out = torch.ones_like(param.data, device=device)
+                    mask_in = torch.ones_like(param.data, device=device)
+                    mask_binary = torch.zeros_like(param.data, device=device)
+                    param.data = param.data
                 mask_idx += 1
             else:
-                # Instead of raising error, use default mask (all ones) and log warning
                 print(f"Warning: Not enough masks for {name}. Using default mask (all ones).")
-                mask_out = torch.ones(param.data.shape[0], device=device).view(-1, 1, 1, 1).expand_as(param.data)
-                mask_in = torch.ones(1, param.data.shape[1], 1, 1, device=device).expand_as(param.data)
-                mask_binary = (mask_out * mask_in == 0).float()
-                re_init_param = torch.empty(param.data.shape, device=device)
-                nn.init.kaiming_uniform_(re_init_param, a=math.sqrt(5))
-                param.data = param.data * (1 - mask_binary) + re_init_param * mask_binary
+                mask_binary = torch.zeros_like(param.data, device=device)
+                param.data = param.data
+    if mask_idx < len(mask_list):
+        print(f"Warning: {len(mask_list)} masks provided, but only {mask_idx} used.")
     return net
     
 def re_init_weights(shape, device, reinint_method='kaiming'):
