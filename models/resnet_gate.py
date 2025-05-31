@@ -325,11 +325,20 @@ class ResNet(nn.Module):
             if isinstance(m, virtual_gate):
                 m.reset_value()
 
-    def get_weights(self):
-        if self.block_string == 'BasicBlock':
-            return self.get_weights_basicblock()
-        elif self.block_string == 'Bottleneck':
-            return self.get_weights_bottleneck()
+    # def get_weights(self):
+    #     if self.block_string == 'BasicBlock':
+    #         return self.get_weights_basicblock()
+    #     elif self.block_string == 'Bottleneck':
+    #         return self.get_weights_bottleneck()
+    def get_weights_basicblock(self):
+        weights_list = []
+        # Add conv1 weights
+        weights_list.append([self.conv1.weight, self.conv1.weight])  # conv1 as both up and low
+        # Add BasicBlock weights
+        for name, module in self.named_modules():
+            if isinstance(module, BasicBlock):
+                weights_list.append([module.conv1.weight, module.conv2.weight])
+        return weights_list
 
     def get_weights_basicblock(self):
         modules = list(self.modules())
