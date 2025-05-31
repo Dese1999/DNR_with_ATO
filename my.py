@@ -51,17 +51,32 @@ def get_trainer(cfg):
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+# def save_checkpoint(state, cfg, epochs, is_best=False, filename=None, save=True):
+#     """Save model checkpoint to the specified path."""
+#     if not save:
+#         return
+#     if filename is None:
+#         run_base_dir, ckpt_base_dir, _ = path_utils.get_directories(cfg, state["generation"])
+#         filename = ckpt_base_dir / f"epoch_{epochs - 1}.state"
+#     torch.save(state, filename)
+#     if is_best:
+#         best_path = ckpt_base_dir / "model_best.pth"
+#         torch.save(state, best_path)
+
 def save_checkpoint(state, cfg, epochs, is_best=False, filename=None, save=True):
-    """Save model checkpoint to the specified path."""
     if not save:
         return
     if filename is None:
         run_base_dir, ckpt_base_dir, _ = path_utils.get_directories(cfg, state["generation"])
         filename = ckpt_base_dir / f"epoch_{epochs - 1}.state"
+    filename.parent.mkdir(parents=True, exist_ok=True)  
     torch.save(state, filename)
     if is_best:
         best_path = ckpt_base_dir / "model_best.pth"
+        best_path.parent.mkdir(parents=True, exist_ok=True)  
         torch.save(state, best_path)
+
+
 def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
     """Train the model for a single generation using DNR."""
     arch_mapping = {
