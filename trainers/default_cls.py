@@ -6,10 +6,17 @@ from utils import net_utils
 from utils.eval_utils import accuracy
 from utils.logging import AverageMeter, ProgressMeter
 import matplotlib.pyplot as plt
+from datetime import datetime
+
 # Import DNR-specific utilities
 from utils.net_utils import display_structure, display_structure_hyper, one_hot, mixup_func, cross_entropy_onehot_target, LabelSmoothingLoss
 from utils.hypernet import SelectionBasedRegularization
+# Specify log file path (can be customized)
+log_file = "sparsity_log.txt"
 
+# Log Project Lmd value
+with open(log_file, 'a') as f:
+    f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Project Lmd in this Epoch: {lmdValue}\n")
 __all__ = ["soft_train_ato", "train_ato_no_mask", "validate_ato_mask", "validate_ato_no_mask", "one_step_hypernet_ato", "one_step_net_ato"]
 
 def set_bn_eval(m):
@@ -181,15 +188,23 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
             with torch.no_grad():
                 hyper_net.eval()
                 vector = hyper_net()
-                print("Sparsity (display_structure):")
-                display_structure(hyper_net.transform_output(vector))
-                print("Sparsity (display_structure_hyper):")
-                display_structure_hyper(vector)
+                # Log sparsity for structure
+                with open(log_file, 'a') as f:
+                    f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Sparsity (display_structure):\n")
+                display_structure(hyper_net.transform_output(vector), log_file=log_file)
+                # Log sparsity for hyper structure
+                with open(log_file, 'a') as f:
+                    f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Sparsity (display_structure_hyper):\n")
+                display_structure_hyper(vector, log_file=log_file)
         else:
-            print("Sparsity (display_structure):")
-            display_structure(hyper_net.transform_output(vector))
-            print("Sparsity (display_structure_hyper):")
-            display_structure_hyper(vector)
+            # Log sparsity for structure
+            with open(log_file, 'a') as f:
+                f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Sparsity (display_structure):\n")
+            display_structure(hyper_net.transform_output(vector), log_file=log_file)
+            # Log sparsity for hyper structure
+            with open(log_file, 'a') as f:
+                f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Sparsity (display_structure_hyper):\n")
+            display_structure_hyper(vector, log_file=log_file)
 
     return top1.avg, top5.avg, losses.avg, return_vect
 
