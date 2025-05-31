@@ -325,12 +325,15 @@ class ResNet(nn.Module):
         for m in self.modules():
             if isinstance(m, virtual_gate):
                 m.reset_value()
+     return self.get_weights_bottleneck()
 
-    # def get_weights(self):
-    #     if self.block_string == 'BasicBlock':
-    #         return self.get_weights_basicblock()
-    #     elif self.block_string == 'Bottleneck':
-    #         return self.get_weights_bottleneck()
+    def get_weights(self):
+        if self.block_string == 'BasicBlock':
+            return self.get_weights_basicblock()
+        elif self.block_string == 'Bottleneck':
+            return self.get_weights_bottleneck()
+        else:
+            raise ValueError(f"Unsupported block type: {self.block_string}")
     def get_weights_basicblock(self):
         weights_list = []
         # Add conv1 weights
@@ -341,19 +344,6 @@ class ResNet(nn.Module):
                 weights_list.append([module.conv1.weight, module.conv2.weight])
         return weights_list
 
-    def get_weights_basicblock(self):
-        modules = list(self.modules())
-        weights_list = []
-        for layer_id in range(len(modules)):
-            m = modules[layer_id]
-            current_list = []
-            if isinstance(m, virtual_gate):
-                up_weight = modules[layer_id - 3].weight  # conv1
-                low_weight = modules[layer_id + 1].weight  # conv2
-                current_list.append(up_weight)
-                current_list.append(low_weight)
-                weights_list.append(current_list)
-        return weights_list
 
     def get_weights_bottleneck(self):
         modules = list(self.modules())
