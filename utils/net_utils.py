@@ -221,24 +221,18 @@ def save_checkpoint(state, is_best, filename="checkpoint.pth", save=True):
         shutil.copyfile(filename, filename.parent / "model_best.pth")
 
 
-
-import torch
-import torch.nn as nn
-import math
-
 def reparameterize_non_sparse(cfg, net, net_sparse_set):
     device = cfg.device if hasattr(cfg, 'device') else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     mask_idx = 0
     mask_list = net_sparse_set
 
-    # دیباگ
     weight_layers = [(name, param.shape) for name, param in net.named_parameters() if 'weight' in name and 'bn' not in name and 'downsample' not in name]
-    print(f"Number of weight layers: {len(weight_layers)}")
-    for name, shape in weight_layers:
-        print(f"Layer {name}: {shape}")
-    print(f"Number of masks: {len(mask_list)}")
-    if mask_list:
-        print(f"Sample mask[0] shapes: {[m.shape for m in mask_list[0]]}")
+    # print(f"Number of weight layers: {len(weight_layers)}")
+    # for name, shape in weight_layers:
+    #     print(f"Layer {name}: {shape}")
+    # print(f"Number of masks: {len(mask_list)}")
+    # if mask_list:
+    #     print(f"Sample mask[0] shapes: {[m.shape for m in mask_list[0]]}")
 
     for name, param in net.named_parameters():
         if 'weight' in name and 'bn' not in name and 'downsample' not in name:
@@ -250,7 +244,7 @@ def reparameterize_non_sparse(cfg, net, net_sparse_set):
                 
                 if isinstance(mask_out, torch.Tensor) and isinstance(mask_in, torch.Tensor):
                     if 'fc' in name:  # Handle fc layer separately
-                        # هماهنگی mask_out برای fc
+                        
                         if mask_out.numel() != expected_out_channels:
                             print(f"Warning: Mask_out {mask_idx} size {mask_out.numel()} does not match output channels {expected_out_channels} for {name}")
                             if mask_out.numel() > expected_out_channels:
@@ -262,7 +256,7 @@ def reparameterize_non_sparse(cfg, net, net_sparse_set):
                         mask_out = mask_out.view(-1, 1).expand_as(param.data)  # [10, 512]
                         mask_in = torch.ones_like(param.data, device=device)  # No input mask for fc: [10, 512]
                     else:  # Handle convolutional layers
-                        # هماهنگی mask_out
+                       
                         if mask_out.numel() != expected_out_channels:
                             print(f"Warning: Mask_out {mask_idx} size {mask_out.numel()} does not match output channels {expected_out_channels} for {name}")
                             if mask_out.numel() > expected_out_channels:
@@ -272,11 +266,11 @@ def reparameterize_non_sparse(cfg, net, net_sparse_set):
                                 mask_out = torch.cat([mask_out, padding], dim=0)
                         mask_out = mask_out.to(device).view(-1, 1, 1, 1).expand_as(param.data)
                         
-                        # هماهنگی mask_in
+                       
                         if mask_in.numel() != expected_in_channels:
                             print(f"Warning: Mask_in {mask_idx} size {mask_in.numel()} does not match input channels {expected_in_channels} for {name}")
-                            if name == 'conv1.weight':  # برای conv1
-                                mask_in = torch.ones(1, expected_in_channels, 1, 1, device=device)  # ماسک پیش‌فرض برای RGB
+                            if name == 'conv1.weight':  
+                                mask_in = torch.ones(1, expected_in_channels, 1, 1, device=device)  
                             else:
                                 if mask_in.numel() > expected_in_channels:
                                     mask_in = mask_in[:, :expected_in_channels]
@@ -285,7 +279,6 @@ def reparameterize_non_sparse(cfg, net, net_sparse_set):
                                     mask_in = torch.cat([mask_in, padding], dim=1)
                         mask_in = mask_in.to(device).view(1, -1, 1, 1).expand_as(param.data)
                     
-                    # اعمال ماسک
                     mask_binary = (mask_out * mask_in == 0).float()
                     re_init_param = torch.empty(param.data.shape, device=device)
                     nn.init.kaiming_uniform_(re_init_param, a=math.sqrt(5))
@@ -300,6 +293,8 @@ def reparameterize_non_sparse(cfg, net, net_sparse_set):
                 mask_binary = torch.zeros_like(param.data, device=device)
                 param.data = param.data
     return net
+
+
 def re_init_weights(shape, device, reinint_method='kaiming'):
     """Re-initialize weights using the specified method."""
     mask = torch.empty(shape, requires_grad=False, device=device)
