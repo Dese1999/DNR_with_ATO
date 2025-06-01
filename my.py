@@ -252,10 +252,10 @@ def start_KE(cfg):
         model, hyper_net, cur_mask_vec, epoch_metrics = train_dense(cfg, gen, model, hyper_net, cur_mask_vec)
 
         weights_history["conv1"].append(model.conv1.weight.data.clone().cpu().numpy().flatten())
-        weights_history["layer1.0.conv1"].append(model.layer1[0].conv1.weight.data.clone().cpu().numpy().flatten())
-        weights_history["layer2.0.conv1"].append(model.layer2[0].conv1.weight.data.clone().cpu().numpy().flatten())
-        weights_history["layer3.0.conv1"].append(model.layer3[0].conv1.weight.data.clone().cpu().numpy().flatten())
-        weights_history["layer4.0.conv1"].append(model.layer4[0].conv1.weight.data.clone().cpu().numpy().flatten())
+        weights_history["layer1.0.conv1"].append(model.layer1.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
+        weights_history["layer2.0.conv1"].append(model.layer2.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
+        weights_history["layer3.0.conv1"].append(model.layer3.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
+        weights_history["layer4.0.conv1"].append(model.layer4.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
         weights_history["fc"].append(model.fc.weight.data.clone().cpu().numpy().flatten())
 
         mask_history[gen] = {}
