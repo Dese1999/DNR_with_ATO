@@ -336,7 +336,7 @@ if __name__ == "__main__":
     cfg.logger = logger
     cfg.set = getattr(cfg, "set", "CIFAR10")
     cfg.arch = getattr(cfg, "arch", "resnet18")
-
+    cfg.resource_constraint = lambda x: resource_constraint(x, cfg.p)
     if not cfg.no_wandb:
         if cfg.group_vars:
             group_name = cfg.group_vars[0] + str(getattr(cfg, cfg.group_vars[0]))
