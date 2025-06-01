@@ -70,13 +70,19 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
             vector = hyper_net()
             return_vect = vector.clone()
             masks = hyper_net.vector2mask(vector)
+            
             print(f"Dynamic mask generated for epoch {epoch}, vector shape: {vector.shape}")
+            
     else:
         print(">>>>> Using fixed mask")
         return_vect = cur_maskVec.clone()
         vector = cur_maskVec
         masks = hyper_net.vector2mask(vector)
-
+        ########
+    for i, mask_sublist in enumerate(masks):
+        active_channels = mask_sublist[0].sum().item()
+        print(f"Layer {i}: {active_channels} active channels")
+        #####
     for i, (images, target) in enumerate(train_loader):
         data_time.update(time.time() - end)
 
@@ -102,7 +108,7 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         with torch.no_grad():
             #print("Weights length:", len(weights) if weights else 0)
             #print("Masks length:", len(masks) if masks else 0)
-            #sel_loss = cfg.selection_reg(weights, masks) if hasattr(cfg, 'selection_reg') else 0.0
+            sel_loss = cfg.selection_reg(weights, masks) if hasattr(cfg, 'selection_reg') else 0.0
             if hasattr(cfg, 'selection_reg') and weights and masks:
                 sel_loss = cfg.selection_reg(weights, masks)
                 #print(f"sel_loss: {sel_loss}, type: {type(sel_loss)}, weights_len: {len(weights)}, masks_len: {len(masks)}")
@@ -148,9 +154,12 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         if epoch >= cfg.start_epoch_hyper and (epoch < int((cfg.epochs - 5) / 2) + 5):
             if (i + 1) % cfg.hyper_step == 0:
                 val_inputs, val_targets = next(iter(valid_loader))
+                print(f"val_inputs shape: {val_inputs.shape}, dtype: {val_inputs.dtype}, device: {val_inputs.device}")
+                print(f"val_targets shape: {val_targets.shape}, dtype: {val_targets.dtype}, device: {val_targets.device}, min: {val_targets.min().item()}, max: {val_targets.max().item()}")
+                
                 val_inputs = val_inputs.cuda()
                 val_targets = val_targets.long().squeeze().cuda()
-
+               
                 optimizer_hyper.zero_grad()
 
                 # Compute hyper_net loss with resource constraint (DNR)
