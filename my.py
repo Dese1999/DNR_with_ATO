@@ -8,6 +8,7 @@ sys.path.append('/content/DNR_with_ATO')
 from copy import deepcopy
 from torch import nn
 from utils import net_utils, path_utils, hypernet#,plot_utils
+from utils.plot_utils import plot_accuracy, plot_loss, plot_sparsity, plot_layer_sparsity, plot_mask_overlap
 from utils.logging import AverageMeter, ProgressMeter
 from utils.eval_utils import accuracy
 from layers.CS_KD import KDLoss
@@ -269,8 +270,9 @@ def start_KE(cfg):
         try:
             expected_length = cfg.epochs
             for key in epoch_metrics:
-                if len(epoch_metrics[key]) != expected_length:
+                if isinstance(epoch_metrics[key], list) and len(epoch_metrics[key]) != expected_length:
                     epoch_metrics[key].extend([None] * (expected_length - len(epoch_metrics[key])))
+            
             epoch_df = pd.DataFrame({
                 "Epoch": range(cfg.epochs),
                 "Generation": [gen] * cfg.epochs,
@@ -313,7 +315,7 @@ def start_KE(cfg):
         plot_accuracy(df, base_dir, cfg.set, cfg.arch)
         plot_loss(df, base_dir, cfg.set, cfg.arch)
         plot_sparsity(mask_history, base_dir, cfg.set, cfg.arch)
-        plot_layer_sparsity(epoch_metrics, cfg, base_dir, cfg.set, cfg.arch)
+        #plot_layer_sparsity(epoch_metrics, cfg, base_dir, cfg.set, cfg.arch)
         plot_mask_overlap(model, mask_history, base_dir, cfg.set, cfg.arch)
 
 def clean_dir(ckpt_dir, num_epochs):
