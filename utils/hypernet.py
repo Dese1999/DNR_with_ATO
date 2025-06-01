@@ -46,7 +46,7 @@ class custom_STE(torch.autograd.Function):
         return grad_input
 
 class HyperStructure(nn.Module):
-    def __init__(self, structure=None, T=0.4, base=3.0, args=None, training_mode=True):
+    def __init__(self, structure=None, T=0.4, base=3.0, args=None,num_cls=10, training_mode=True):
         super(HyperStructure, self).__init__()
         if not structure or len(structure) == 0:
             raise ValueError("The 'structure' argument must be a non-empty list. Received: {}".format(structure))
@@ -66,6 +66,7 @@ class HyperStructure(nn.Module):
         self.block_string = getattr(args, 'block_string', 'BasicBlock')
         self.se_list = getattr(args, 'se_list', [False] * len(structure))
         self.training_mode = training_mode
+        self.num_cls = num_cls
 
         # validation
         if self.model_name not in ['resnet', 'mobnetv2', 'mobnetv3']:
@@ -166,7 +167,7 @@ class HyperStructure(nn.Module):
             start = end
     
         # add mask for fc layer
-        fc_mask_out = torch.ones(self.args.num_cls, device=vector.device).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+        fc_mask_out = torch.ones(self.num_cls, device=vector.device).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
         fc_mask_in = torch.ones(1, self.structure[-1], 1, 1, device=vector.device)
         mask_list.append([fc_mask_out, fc_mask_in])
     
