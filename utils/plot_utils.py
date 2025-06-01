@@ -6,7 +6,6 @@ import pandas as pd
 import os
 import torch
 from copy import deepcopy
-from my import percentage_overlap
 def plot_accuracy(df, base_dir, set_name, arch):
     """Plot train and test accuracy over epochs."""
     plt.figure(figsize=(12, 6))
