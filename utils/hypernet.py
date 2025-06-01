@@ -90,6 +90,8 @@ class HyperStructure(nn.Module):
         if not self.training_mode:
             out = hard_concrete(out, device=device)
         #print(f"HyperStructure forward output shape: {out.shape}, expected length: {sum(self.structure)}")
+        print(f"HyperStructure output shape: {out.shape}, expected: [{sum(self.structure)}]")
+
         return out
 
     # def transform_output(self, inputs):
