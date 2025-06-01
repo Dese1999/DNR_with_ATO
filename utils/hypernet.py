@@ -275,6 +275,7 @@ class virtual_gate(nn.Module):
     def __init__(self, width):
         super(virtual_gate, self).__init__()
         self.width = width
+        self.gate_f = nn.Parameter(torch.ones(width))
 
     def forward(self, input, cur_mask_vec):
         orignal_input = input.detach()
@@ -292,7 +293,8 @@ class virtual_gate(nn.Module):
         return torch.tensor(0.0)  # Placeholder, not used in DNR
 
     def reset_value(self):
-        pass  # No need to reset in DNR
+        self.gate_f.data.fill_(1.0)
+        #self.gate_f = torch.ones(self.width )
 
 class AC_layer(nn.Module):
     def __init__(self, in_features, num_class=10):
