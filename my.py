@@ -8,6 +8,7 @@ sys.path.append('/content/DNR_with_ATO')
 from copy import deepcopy
 from torch import nn
 from utils import net_utils, path_utils, hypernet#,plot_utils
+from utils.hypernet import resource_constraint
 from utils.plot_utils import plot_accuracy, plot_loss, plot_sparsity, plot_layer_sparsity, plot_mask_overlap
 from utils.logging import AverageMeter, ProgressMeter
 from utils.eval_utils import accuracy
