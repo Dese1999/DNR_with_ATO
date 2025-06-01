@@ -117,7 +117,7 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
             raise ValueError(f"Expected 17 layers in structure, got {len(structure)}: {structure}")
         expected_total = sum(structure)
         print(f"Expected total channels: {expected_total}")
-        hyper_net = HyperStructure(structure=structure, T=cfg.hyper_t, base=cfg.hyper_base, args=cfg)
+        hyper_net = HyperStructure(structure=structure, T=cfg.hyper_t, base=cfg.hyper_base, num_cls=cfg.num_cls, args=cfg)
         hyper_net = hyper_net.cuda()
 
     if cfg.save_model:
