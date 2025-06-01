@@ -70,6 +70,7 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
             vector = hyper_net()
             return_vect = vector.clone()
             masks = hyper_net.vector2mask(vector)
+            print(f"Dynamic mask generated for epoch {epoch}, vector shape: {vector.shape}")
     else:
         print(">>>>> Using fixed mask")
         return_vect = cur_maskVec.clone()
