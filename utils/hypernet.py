@@ -101,7 +101,7 @@ class HyperStructure(nn.Module):
     #     return arch_vector
     def transform_output(self, inputs):
         if inputs.dim() == 1 and len(inputs) == sum(self.structure):
-            return inputs  # بازگشت بردار پیوسته [3904]
+            return inputs  # ا [3904]
         raise ValueError(f"Expected 1D vector of length {sum(self.structure)}, got shape {inputs.shape}")
     # def transform_output(self, inputs):
     #     if inputs.dim() == 1 and len(inputs) == sum(self.structure):
@@ -138,13 +138,14 @@ class HyperStructure(nn.Module):
     #         mask_list.append(item_list)
     #     return mask_list
     def vector2mask_resnet(self, inputs):
-        vector = self.transform_output(inputs)  # [sum(structure)]
+        vector = self.transform_output(inputs)
         mask_list = []
         start = 0
-        total_channels = sum(self.structure)  # مثلاً 3904
+        total_channels = sum(self.structure)
         if len(vector) != total_channels:
             print(f"Error: Vector length {len(vector)} is less than required {total_channels}")
             return []
+    
         for i in range(len(self.structure)):
             item_list = []
             out_channels = self.structure[i]
@@ -157,13 +158,20 @@ class HyperStructure(nn.Module):
             if i == 0:
                 mask_input = torch.ones(1, in_channels, 1, 1, device=vector.device)
             else:
-                mask_input = vector[start-out_channels:start].unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+                prev_start = start - self.structure[i-1]
+                mask_input = vector[prev_start:start].unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
             item_list.append(mask_output)
             item_list.append(mask_input)
             mask_list.append(item_list)
             start = end
-            #print(f"Layer {i}: mask_out shape {mask_output.shape}, mask_in shape {mask_input.shape}, out_channels {out_channels}, in_channels {in_channels}")
+    
+        # add mask for fc layer
+        fc_mask_out = torch.ones(self.args.num_cls, device=vector.device).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+        fc_mask_in = torch.ones(1, self.structure[-1], 1, 1, device=vector.device)
+        mask_list.append([fc_mask_out, fc_mask_in])
+    
         return mask_list
+        
     def vector2mask_resnetbb(self, inputs):
         vector = self.transform_output(inputs)
         mask_list = []
