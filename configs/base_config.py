@@ -28,7 +28,7 @@ class Config:
             "--gl-lam", default=0.0001, type=float, help="Group Lasso coefficient for SelectionBasedRegularization"
         )
         parser.add_argument(
-            "--p", default=0.5, type=float, help="Target pruning rate for ATO"
+            "--p", default=0.8, type=float, help="Target pruning rate for ATO"
         )
         parser.add_argument(
             "--use-fim", action="store_true", default=False, help="Use Fisher Information Matrix for pruning"
