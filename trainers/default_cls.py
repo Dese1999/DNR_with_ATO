@@ -171,6 +171,7 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
 
                 res_loss = 2 * cfg.resource_constraint(hyper_net.resource_output())
                 h_loss = nn.CrossEntropyLoss()(hyper_outputs, val_targets) + res_loss
+                print(f"Hyper loss: {h_loss.item()}, Res loss: {res_loss.item()}, Hyper outputs shape: {hyper_outputs.shape}")
                 h_loss.backward()
                 optimizer_hyper.step()
                 if scheduler_hyper is not None:
