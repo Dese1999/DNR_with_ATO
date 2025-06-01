@@ -82,6 +82,7 @@ def plot_layer_sparsity(epoch_metrics, cfg, base_dir, set_name, arch):
 
 def plot_mask_overlap(model, mask_history, base_dir, set_name, arch):
     """Plot mask overlap between different generations using Seaborn."""
+    from my import percentage_overlap
     overlap_data = []
     for gen1 in mask_history:
         for gen2 in mask_history:
