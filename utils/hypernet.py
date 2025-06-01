@@ -455,3 +455,7 @@ class SelectionBasedRegularization(nn.Module):
             fim_loss = self.compute_fim(weights, masks)
             sum_loss += 0.1 * fim_loss
         return sum_loss    
+
+def resource_constraint(resource_output, target_sparsity=0.7):
+    sparsity = 1 - resource_output.mean()
+    return torch.abs(sparsity - target_sparsity)
