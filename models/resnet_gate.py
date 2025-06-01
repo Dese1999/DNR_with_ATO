@@ -309,7 +309,8 @@ class ResNet(nn.Module):
                 if end > len(arch_vector.squeeze()):
                     print(f"Error: arch_vector too short. Expected at least {end}, got {len(arch_vector.squeeze())}")
                     return
-                m.gate_f = arch_vector.squeeze()[start:end].to(m.gate_f.device)
+                #m.gate_f = arch_vector.squeeze()[start:end].to(m.gate_f.device)
+                m.gate_f.data = arch_vector.squeeze()[start:end].to(m.gate_f.device)
                 start = end
                 print(f"Set gate {i} with width {width}, vector slice [{start-width}:{start}]")
 
