@@ -159,7 +159,8 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
                 
                 val_inputs = val_inputs.cuda()
                 val_targets = val_targets.long().squeeze().cuda()
-               
+                #########
+                print(f"val_inputs device: {val_inputs.device}, val_targets device: {val_targets.device}")
                 optimizer_hyper.zero_grad()
 
                 # Compute hyper_net loss with resource constraint (DNR)
