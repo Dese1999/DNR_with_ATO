@@ -82,7 +82,7 @@ class HyperStructure(nn.Module):
         outputs = [F.relu(self.bn1(outputs[i, 0, :])) for i in range(len(self.structure))]
         outputs = [self.mh_fc[i](outputs[i]) for i in range(len(self.mh_fc))]
         for i, output in enumerate(outputs):
-            print(f"Output {i} shape: {output.shape}, expected: [{self.structure[i]}]")
+            #print(f"Output {i} shape: {output.shape}, expected: [{self.structure[i]}]")
             if output.shape[0] != self.structure[i]:
                 raise ValueError(f"Output {i} has shape {output.shape}, expected [{self.structure[i]}]")
         out = torch.cat(outputs, dim=0)  # [sum(structure)]
@@ -170,6 +170,10 @@ class HyperStructure(nn.Module):
         fc_mask_out = torch.ones(self.num_cls, device=vector.device).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
         fc_mask_in = torch.ones(1, self.structure[-1], 1, 1, device=vector.device)
         mask_list.append([fc_mask_out, fc_mask_in])
+        for i, item_list in enumerate(mask_list):
+            mask_output = item_list[0]
+            sparsity = 100 * (1 - mask_output.mean().item())
+            print(f"Layer {i} mask sparsity: {sparsity:.2f}%")
     
         return mask_list
         
