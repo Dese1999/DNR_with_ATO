@@ -6,26 +6,22 @@ import sys
 sys.path.append('/content/DNR_with_ATO')
 from copy import deepcopy
 from torch import nn
-from utils import net_utils, path_utils, hypernet#,plot_utils
+from utils import net_utils, path_utils, hypernet
 from utils.hypernet import resource_constraint
-from utils.plot_utils import plot_accuracy, plot_loss, plot_sparsity, plot_layer_sparsity, plot_mask_overlap
+from utils.plot_utils import plot_accuracy, plot_loss, plot_sparsity, plot_mask_overlap
 from utils.logging import AverageMeter, ProgressMeter
 from utils.eval_utils import accuracy
 from layers.CS_KD import KDLoss
 from configs.base_config import Config
 import importlib
 from torchvision import transforms, datasets
-#from datasets import load_dataset  
 from torch.utils.data import random_split
 import wandb
 import logging
-
-import inspect
-#from utils.plot_utils import plot_accuracy, plot_loss, plot_sparsity, plot_layer_sparsity, plot_mask_overlap  
-from utils.hypernet import AC_layer,HyperStructure,SelectionBasedRegularization
-from utils.net_utils import reparameterize_non_sparse,display_structure_hyper
+from utils.hypernet import AC_layer, HyperStructure, SelectionBasedRegularization
+from utils.net_utils import reparameterize_non_sparse, display_structure_hyper
 from trainers.default_cls import soft_train, validate, validate_mask
-from data.datasets import load_dataset  
+from data.datasets import load_dataset
 from models.resnet_gate import (
     ResNet,
     resnet18,
@@ -40,6 +36,11 @@ from models.resnet_gate import (
     wide_resnet50_2,
     wide_resnet101_2,
 )
+
+# Configure basic logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
 def get_trainer(cfg):
     """Retrieve training and validation functions from the specified trainer module."""
     try:
@@ -49,30 +50,18 @@ def get_trainer(cfg):
         logger.error(f"Failed to import trainer module: {e}")
         raise
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
-log_file = pathlib.Path(f"{path_utils.get_checkpoint_dir()}/{cfg.name}/training_log.txt")
-log_file.parent.mkdir(parents=True, exist_ok=True)  # create directory
-
-# Setting the log format
-logger = logging.getLogger(__name__)
-file_handler = logging.FileHandler(log_file)
-file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-logger.addHandler(file_handler)
 def save_checkpoint(state, cfg, epochs, is_best=False, filename=None, save=True):
     if not save:
         return
     if filename is None:
         run_base_dir, ckpt_base_dir, _ = path_utils.get_directories(cfg, state["generation"])
         filename = ckpt_base_dir / f"epoch_{epochs - 1}.state"
-    filename.parent.mkdir(parents=True, exist_ok=True)  
+    filename.parent.mkdir(parents=True, exist_ok=True)
     torch.save(state, filename)
     if is_best:
         best_path = ckpt_base_dir / "model_best.pth"
-        best_path.parent.mkdir(parents=True, exist_ok=True)  
+        best_path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(state, best_path)
-
 
 def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
     """Train the model for a single generation using DNR."""
@@ -89,7 +78,6 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
         "wide_resnet50_2": wide_resnet50_2,
         "wide_resnet101_2": wide_resnet101_2,
     }
-    
 
     model_func = arch_mapping.get(cfg.arch.lower())
     if model_func is None:
@@ -104,104 +92,106 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
 
     if cfg.pretrained and cfg.pretrained != "imagenet":
         net_utils.load_pretrained(cfg.pretrained, cfg.gpu, model, cfg)
-        model = net_utils.move_model_to_gpu(cfg, model)
-
     model = net_utils.move_model_to_gpu(cfg, model)
 
     if hyper_net is None:
         width, structure = model.count_structure()
-        #print(f"Structure from count_structure: {structure}")
+        logger.info(f"Structure from count_structure: {structure}")
         if len(structure) != 17:
             raise ValueError(f"Expected 17 layers in structure, got {len(structure)}: {structure}")
         expected_total = sum(structure)
-  #      print(f"Expected total channels: {expected_total}")
+        logger.info(f"Expected total channels: {expected_total}")
         hyper_net = HyperStructure(structure=structure, T=cfg.hyper_t, base=cfg.hyper_base, num_cls=cfg.num_cls, args=cfg)
         hyper_net = hyper_net.cuda()
 
     if cfg.save_model:
         run_base_dir, ckpt_base_dir, _ = path_utils.get_directories(cfg, generation)
-        net_utils.save_checkpoint({"epoch": 0, "arch": cfg.arch, "state_dict": model.state_dict(), "generation": generation},
-                                 is_best=False, filename=ckpt_base_dir / "init_model.state", save=False)
+        net_utils.save_checkpoint(
+            {"epoch": 0, "arch": cfg.arch, "state_dict": model.state_dict(), "generation": generation},
+            is_best=False, filename=ckpt_base_dir / "init_model.state", save=True
+        )
 
     cfg.trainer = "default_cls"
-    cfg.pretrained = None
-    # Loss and Optimizer
     criterion = nn.CrossEntropyLoss()
     params_group = net_utils.group_weight(hyper_net)
     optimizer_hyper = torch.optim.AdamW(params_group, lr=1e-3, weight_decay=1e-2)
-    scheduler_hyper = torch.optim.lr_scheduler.MultiStepLR(optimizer_hyper, milestones=[int(0.98 * ((cfg.epochs - 5) / 2) + 5)], gamma=0.1)
+    scheduler_hyper = torch.optim.lr_scheduler.MultiStepLR(optimizer_hyper, milestones=[int(0.98 * ((cfg.epochs - 5) / 2)) + 5], gamma=0.1)
 
     params = net_utils.group_weight(model) if hasattr(cfg, "bn_decay") and cfg.bn_decay else model.parameters()
     optimizer = torch.optim.SGD(params, lr=cfg.lr, momentum=cfg.momentum, weight_decay=cfg.weight_decay) if cfg.optimizer.lower() == "sgd" else torch.optim.AdamW(params, lr=cfg.lr, weight_decay=cfg.weight_decay)
-    base_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, int((cfg.epochs - 5) / 2))
+    base_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, int((cfg.epochs - 1) / 2))
     scheduler = net_utils.GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=5, after_scheduler=base_scheduler)
 
-    
-    train_loader, val_loader = load_dataset(name=cfg.set, root=cfg.data, path=cfg.data, sample='default', batch_size=cfg.batch_size)
-    # Create validation subset for HyperNet
+    train_loader, val_loader = load_dataset(name=cfg.set, root=cfg.data, path=cfg.data, sample='train', batch_size=cfg.batch_size)
     ratio = (len(train_loader.dataset) / cfg.hyper_step) / len(train_loader.dataset)
     _, val_gate_dataset = random_split(train_loader.dataset, [len(train_loader.dataset) - int(ratio * len(train_loader.dataset)), int(ratio * len(train_loader.dataset))])
     val_loader_gate = net_utils.MultiEpochsDataLoader(val_gate_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=4, pin_memory=True)
-    ###
+
     cfg.selection_reg = SelectionBasedRegularization(args=cfg, model=model)
-    print("Checking selection_reg:", hasattr(cfg, 'selection_reg'))
-    
-    epoch_metrics = {"train_acc1": [], "train_acc5": [], "train_loss": [], "test_acc1": [], "test_acc5": [], "test_loss": [], "avg_sparsity": [], "mask_update": []}
-    #print(f"masks type: {type(masks)}, len: {len(masks)}, sample: {masks[0] if masks else None}")
-    
+    logger.info(f"Checking selection_reg: {hasattr(cfg, 'selection_reg')}")
+
+    epoch_metrics = {
+        "train_acc1": [], "train_acc5": [], "train_loss": [],
+        "test_acc1": [], "test_acc5": [], "test_loss": [],
+        "avg_sparsity": [], "mask_update": []
+    }
+
     for epoch in range(cfg.epochs):
-        train_acc1, train_acc5, train_loss, cur_mask_vec = soft_train(
-            train_loader, model, hyper_net, criterion, val_loader_gate, 
-            optimizer, optimizer_hyper, epoch, cur_mask_vec, cfg, 
-            scheduler=scheduler, scheduler_hyper=scheduler_hyper  
-        )
+        try:
+            train_acc1, train_acc5, train_loss, cur_mask_vec = soft_train(
+                train_loader, model, hyper_net, criterion, val_loader_gate,
+                optimizer, optimizer_hyper, epoch, cur_mask_vec, cfg,
+                scheduler=scheduler, scheduler_hyper=scheduler_hyper
+            )
 
-        test_acc1, test_acc5, test_loss = validate(val_loader, model, criterion, cfg, epoch) if epoch == 0 or (epoch + 1) % 10 == 0 else (0, 0, 0)
-        if epoch >= cfg.start_epoch_hyper:
-            test_acc1, test_acc5, test_loss = validate_mask(val_loader, model, criterion, cfg, epoch, cur_mask_vec)
+            test_acc1, test_acc5, test_loss = validate(val_loader, model, criterion, cfg, epoch) if epoch == 0 or (epoch + 1) % 10 == 0 else (0, 0, 0)
+            if epoch >= cfg.start_epoch_hyper:
+                test_acc1, test_acc5, test_loss = validate_mask(val_loader, model, criterion, cfg, epoch, cur_mask_vec)
 
-        with torch.no_grad():
-            hyper_net.eval()
-            sparsity_str = display_structure_hyper(cur_mask_vec, log_file="sparsity_log.txt")
-            sparsity_values = [float(s) for s in sparsity_str.split() if s.replace(".", "").isdigit()]
-            avg_sparsity = sum(sparsity_values) / len(sparsity_values) if sparsity_values else 0
-            masks = hyper_net.vector2mask(cur_mask_vec)
-            layer_sparsity = {}
-            for idx, mask_sublist in enumerate(masks):
-                for sub_idx, param in enumerate(mask_sublist):
-                    name = f"layer_{idx}_mask_{sub_idx}"
-                    sparsity = 100 * (1 - param.mean().item())
-                    layer_sparsity[name] = sparsity
-           
-            if "layer_sparsity" not in epoch_metrics:
-                epoch_metrics["layer_sparsity"] = {}
-            for layer, sparsity in layer_sparsity.items():
-                if layer not in epoch_metrics["layer_sparsity"]:
-                    epoch_metrics["layer_sparsity"][layer] = []
-                epoch_metrics["layer_sparsity"][layer].append(sparsity)
-
-        #Logging metrics
-        log_message = (
-            f"Generation: {generation}, Epoch: {epoch}, "
-            f"Train Acc@1: {train_acc1:.2f}, Train Acc@5: {train_acc5:.2f}, Train Loss: {train_loss:.4f}, "
-            f"Test Acc@1: {test_acc1:.2f}, Test Acc@5: {test_acc5:.2f}, Test Loss: {test_loss:.4f}, "
-            f"Avg Sparsity: {avg_sparsity:.2f}, Mask Update: {(epoch + 1) % cfg.hyper_step == 0}"
-        )
-        logger.info(log_message)
-        # Store metrics in epoch_metrics
-        epoch_metrics["train_acc1"].append(train_acc1)
-        epoch_metrics["train_acc5"].append(train_acc5)
-        epoch_metrics["train_loss"].append(train_loss)
-        epoch_metrics["test_acc1"].append(test_acc1)
-        epoch_metrics["test_acc5"].append(test_acc5)
-        epoch_metrics["test_loss"].append(test_loss)
-        epoch_metrics["avg_sparsity"].append(avg_sparsity)
-        epoch_metrics["mask_update"].append((epoch + 1) % cfg.hyper_step == 0)
-
-        if epoch == cfg.epochs - 1:
             with torch.no_grad():
+                hyper_net.eval()
+                sparsity_str = display_structure_hyper(cur_mask_vec, log_file=None)
+                logger.info(f"Sparsity: {sparsity_str}")
+                sparsity_values = [float(s) for s in sparsity_str.split() if s.replace(".", "").isdigit()]
+                avg_sparsity = sum(sparsity_values) / len(sparsity_values) if sparsity_values else 0
                 masks = hyper_net.vector2mask(cur_mask_vec)
-                model = reparameterize_non_sparse(cfg, model, masks)
+                layer_sparsity = {}
+                for idx, mask_sublist in enumerate(masks):
+                    for sub_idx, param in enumerate(mask_sublist):
+                        name = f"layer_{idx}_mask_{sub_idx}"
+                        sparsity = 100 * (1 - param.mean().item())
+                        layer_sparsity[name] = sparsity
+                if "layer_sparsity" not in epoch_metrics:
+                    epoch_metrics["layer_sparsity"] = {}
+                for layer, sparsity in layer_sparsity.items():
+                    if layer not in epoch_metrics["layer_sparsity"]:
+                        epoch_metrics["layer_sparsity"][layer] = []
+                    epoch_metrics["layer_sparsity"][layer].append(sparsity)
+
+            log_message = (
+                f"Generation: {generation}, Epoch: {epoch}, "
+                f"Train Acc@1: {train_acc1:.2f}, Train Acc@5: {train_acc5:.2f}, Train Loss: {train_loss:.4f}, "
+                f"Test Acc@1: {test_acc1:.2f}, Test Acc@5: {test_acc5:.2f}, Test Loss: {test_loss:.4f}, "
+                f"Avg Sparsity: {avg_sparsity:.2f}, Mask Update: {(epoch + 1) % cfg.hyper_step == 0}"
+            )
+            logger.info(log_message)
+
+            epoch_metrics["train_acc1"].append(train_acc1)
+            epoch_metrics["train_acc5"].append(train_acc5)
+            epoch_metrics["train_loss"].append(train_loss)
+            epoch_metrics["test_acc1"].append(test_acc1)
+            epoch_metrics["test_acc5"].append(test_acc5)
+            epoch_metrics["test_loss"].append(test_loss)
+            epoch_metrics["avg_sparsity"].append(avg_sparsity)
+            epoch_metrics["mask_update"].append((epoch + 1) % cfg.hyper_step == 0)
+
+            if epoch == cfg.epochs - 1:
+                with torch.no_grad():
+                    masks = hyper_net.vector2mask(cur_mask_vec)
+                    model = reparameterize_non_sparse(cfg, model, masks)
+        except RuntimeError as e:
+            logger.error(f"Error in epoch {epoch} of generation {generation}: {e}")
+            continue
 
     if cfg.save_model:
         save_checkpoint(
@@ -217,7 +207,7 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
             cfg,
             epochs=cfg.epochs,
         )
-    # Save the DataFrame to a CSV file for further review    
+
     df = pd.DataFrame(epoch_metrics)
     df["Epoch"] = range(cfg.epochs)
     df["Generation"] = generation
@@ -238,9 +228,6 @@ def percentage_overlap(prev_mask, curr_mask, percent_flag=False):
             total_percent[name] = percent * 100
     return total_percent
 
-
-
-
 def start_KE(cfg):
     """Start the Knowledge Evolution training process."""
     base_dir = pathlib.Path(f"{path_utils.get_checkpoint_dir()}/{cfg.name}")
@@ -252,12 +239,8 @@ def start_KE(cfg):
     cur_mask_vec = None
 
     weights_history = {
-        "conv1": [],
-        "layer1.0.conv1": [],
-        "layer2.0.conv1": [],
-        "layer3.0.conv1": [],
-        "layer4.0.conv1": [],
-        "fc": [],
+        "conv1": [], "layer1.0.conv1": [], "layer2.0.conv1": [],
+        "layer3.0.conv1": [], "layer4.0.conv1": [], "fc": [],
     }
     mask_history = {}
     all_epoch_data = []
@@ -266,8 +249,6 @@ def start_KE(cfg):
         try:
             cfg.start_epoch = 0
             model, hyper_net, cur_mask_vec, epoch_metrics = train_dense(cfg, gen, model, hyper_net, cur_mask_vec)
-
-            # Store weights history
             weights_history["conv1"].append(model.conv1.weight.data.clone().cpu().numpy().flatten())
             weights_history["layer1.0.conv1"].append(model.layer1.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
             weights_history["layer2.0.conv1"].append(model.layer2.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
@@ -275,7 +256,6 @@ def start_KE(cfg):
             weights_history["layer4.0.conv1"].append(model.layer4.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
             weights_history["fc"].append(model.fc.weight.data.clone().cpu().numpy().flatten())
 
-            # Store mask history
             mask_history[gen] = {}
             if cur_mask_vec is not None:
                 masks = hyper_net.vector2mask(cur_mask_vec)
@@ -284,12 +264,11 @@ def start_KE(cfg):
                         name = f"layer_{idx}_mask_{sub_idx}"
                         mask_history[gen][name] = param.data.clone().cpu().numpy()
 
-            # Create DataFrame for epoch metrics
             expected_length = cfg.epochs
             for key in epoch_metrics:
                 if isinstance(epoch_metrics[key], list) and len(epoch_metrics[key]) != expected_length:
                     epoch_metrics[key].extend([None] * (expected_length - len(epoch_metrics[key])))
-            
+
             epoch_df = pd.DataFrame({
                 "Epoch": range(cfg.epochs),
                 "Generation": [gen] * cfg.epochs,
@@ -320,7 +299,6 @@ def start_KE(cfg):
             all_epoch_data.append(epoch_df)
             continue
 
-    # Save comprehensive metrics file
     if all_epoch_data:
         try:
             df = pd.concat(all_epoch_data, ignore_index=True)
@@ -331,7 +309,6 @@ def start_KE(cfg):
     else:
         df = pd.DataFrame()
 
-    # Plot results if data is available
     if not df.empty and mask_history:
         try:
             plot_accuracy(df, base_dir, cfg.set, cfg.arch)
@@ -353,14 +330,22 @@ def clean_dir(ckpt_dir, num_epochs):
             rm_path.unlink()
 
 if __name__ == "__main__":
-    #cfg = Config().parse([])  # sys.argv[1:] 
     cfg = Config().parse(sys.argv[1:])
+    
+    # Configure logging with cfg
+    log_file = pathlib.Path(f"{path_utils.get_checkpoint_dir()}/{cfg.name}/training_log.txt")
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+    logger.addHandler(file_handler)
+
     cfg.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     cfg.conv_type = "SplitConv"
     cfg.logger = logger
     cfg.set = getattr(cfg, "set", "CIFAR10")
     cfg.arch = getattr(cfg, "arch", "resnet18")
     cfg.resource_constraint = lambda x: resource_constraint(x, cfg.p)
+    
     if not cfg.no_wandb:
         if cfg.group_vars:
             group_name = cfg.group_vars[0] + str(getattr(cfg, cfg.group_vars[0]))
