@@ -120,22 +120,15 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
             scheduler.step()
 
         # Apply projection (Group Lasso or OTO) for ATO
-        if epoch >= cfg.start_epoch_gl:
-            if cfg.lmd > 0:
-                lmdValue = cfg.lmd
-            elif cfg.lmd == 0:
-                if epoch < int((cfg.epochs - 5) / 2):
-                    lmdValue = 10
-                else:
-                    lmdValue = 1000
-
+        lmdValue = args.lmd  
+        if epoch >= args.start_epoch_gl:
             with torch.no_grad():
-                if cfg.project == 'gl':
+                if args.project == 'gl':
                     if hasattr(model, 'module'):
                         model.module.project_wegit(hyper_net.transform_output(vector), lmdValue, model.lr)
                     else:
                         model.project_wegit(hyper_net.transform_output(vector), lmdValue, model.lr)
-                elif cfg.project == 'oto':
+                elif args.project == 'oto':
                     model.oto(hyper_net.transform_output(vector))
 
         # Compute accuracy
