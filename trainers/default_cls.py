@@ -125,11 +125,11 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
             with torch.no_grad():
                 if cfg.project == 'gl':
                     if hasattr(model, 'module'):
-                         model.module.project_weight(hyper_net.transform_output(vector), lmdValue, model.lr)                        
+                         model.module.project_weight(hyper_net.vector2mask(vector), lmdValue, model.lr)                        
                     else:
-                        model.project_weight(hyper_net.transform_output(vector), lmdValue, model.lr)
+                        model.project_weight(hyper_net.vector2mask(vector), lmdValue, model.lr)
                 elif cfg.project == 'oto':
-                    model.oto(hyper_net.transform_output(vector))
+                    model.oto(hyper_net.vector2mask(vector))
 
         # Compute accuracy
         acc1, acc5 = accuracy(outputs, target, topk=(1, 5))
