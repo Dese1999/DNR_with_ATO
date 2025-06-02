@@ -342,7 +342,8 @@ class ResNet(nn.Module):
         """Apply Group Lasso projection to weights based on masks."""
         self.lmd = lmd
         self.lr = lr
-        N_t = sum((1 - mask[0].squeeze()).sum() for mask in masks[:-1])
+        N_t = sum((1 - mask[0].mean()).item() for mask in masks[:-1])
+        #N_t = sum((1 - mask[0].squeeze()).sum() for mask in masks[:-1])
         gap = 2 if self.block_string == 'Bottleneck' else 3
         modules = list(self.modules())
         vg_idx = 0
@@ -354,8 +355,8 @@ class ResNet(nn.Module):
                 if ratio == 0:
                     vg_idx += 1
                     continue
-
-                m_out = (masks[vg_idx][0].squeeze() == 0)
+                m_out = (masks[vg_idx][0] == 0)
+                #m_out = (masks[vg_idx][0].squeeze() == 0)
                 vg_idx += 1
                 w_norm = (modules[layer_id - gap].weight.data[m_out]).pow(2).sum((1, 2, 3))
                 w_norm += (modules[layer_id - gap + 1].weight.data[m_out]).pow(2).sum((1, 2, 3))
