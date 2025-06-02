@@ -82,16 +82,12 @@ class HyperStructure(nn.Module):
         outputs = [F.relu(self.bn1(outputs[i, 0, :])) for i in range(len(self.structure))]
         outputs = [self.mh_fc[i](outputs[i]) for i in range(len(self.mh_fc))]
         for i, output in enumerate(outputs):
-            #print(f"Output {i} shape: {output.shape}, expected: [{self.structure[i]}]")
             if output.shape[0] != self.structure[i]:
                 raise ValueError(f"Output {i} has shape {output.shape}, expected [{self.structure[i]}]")
         out = torch.cat(outputs, dim=0)  # [sum(structure)]
         out = gumbel_softmax_sample(out, T=self.T, offset=self.base, device=device)
         if not self.training_mode:
-            out = hard_concrete(out, device=device)
-        #print(f"HyperStructure forward output shape: {out.shape}, expected length: {sum(self.structure)}")
-        #print(f"HyperStructure output shape: {out.shape}, expected: [{sum(self.structure)}]")
-
+            out = hard_concrete(out, device=device
         return out
 
     # def transform_output(self, inputs):
