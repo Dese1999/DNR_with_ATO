@@ -53,13 +53,13 @@ def get_trainer(cfg):
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 log_file = pathlib.Path(f"{path_utils.get_checkpoint_dir()}/{cfg.name}/training_log.txt")
-    log_file.parent.mkdir(parents=True, exist_ok=True)  # create directory
+log_file.parent.mkdir(parents=True, exist_ok=True)  # create directory
 
-    # Setting the log format
-    logger = logging.getLogger(__name__)
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-    logger.addHandler(file_handler)
+# Setting the log format
+logger = logging.getLogger(__name__)
+file_handler = logging.FileHandler(log_file)
+file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+logger.addHandler(file_handler)
 def save_checkpoint(state, cfg, epochs, is_best=False, filename=None, save=True):
     if not save:
         return
