@@ -1,12 +1,10 @@
 import torch
 import torch.nn as nn
 from utils.hypernet import soft_gate, virtual_gate
-
-# /content/DNR_with_ATO/models/imgnet_utils.py
 from torch.hub import load_state_dict_from_url
-__all__ = ['load_state_dict_from_url']
 
 __all__ = [
+    'load_state_dict_from_url',
     'ResNet', 'resnet18', 'resnet34', 'my_resnet50', 'resnet101',
     'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
     'wide_resnet50_2', 'wide_resnet101_2'
@@ -37,7 +35,7 @@ class BasicBlock(nn.Module):
     expansion = 1
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1,
-                 base_width=64, dilation=1, norm_layer=None, cfg=None, num_gate=0):
+                 base_width=64, dilation=1, norm_layer=None, cfg=None, num_gate=2):
         super(BasicBlock, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
@@ -45,15 +43,21 @@ class BasicBlock(nn.Module):
             raise ValueError('BasicBlock only supports groups=1 and base_width=64')
         if dilation > 1:
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = norm_layer(planes)
+        if cfg is None:
+            self.conv1 = conv3x3(inplanes, planes, stride)
+            self.bn1 = norm_layer(planes)
+            self.conv2 = conv3x3(planes, planes)
+            self.bn2 = norm_layer(planes)
+        else:
+            self.conv1 = conv3x3(inplanes, cfg[0], stride)
+            self.bn1 = norm_layer(cfg[0])
+            self.conv2 = conv3x3(cfg[0], cfg[1])
+            self.bn2 = norm_layer(cfg[1])
         self.relu = nn.ReLU(inplace=True)
         if num_gate > 0:
-            self.gate = virtual_gate(planes)
+            self.gate = virtual_gate(cfg[0] if cfg else planes)
         else:
             self.gate = None
-        self.conv2 = conv3x3(planes, planes)
-        self.bn2 = norm_layer(planes)
         self.downsample = downsample
         self.stride = stride
         self.num_gate = num_gate
@@ -72,6 +76,7 @@ class BasicBlock(nn.Module):
         out += identity
         out = self.relu(out)
         return out
+
 class MaskedSequential(nn.Module):
     def __init__(self, *args):
         super(MaskedSequential, self).__init__()
@@ -81,7 +86,7 @@ class MaskedSequential(nn.Module):
         for layer in self.layers:
             x = layer(x, cur_mask_vec)
         return x
-        
+
 class Bottleneck(nn.Module):
     expansion = 4
 
@@ -106,9 +111,6 @@ class Bottleneck(nn.Module):
                 self.gate2 = None
             self.conv3 = conv1x1(width, planes * self.expansion)
             self.bn3 = norm_layer(planes * self.expansion)
-            self.relu = nn.ReLU(inplace=True)
-            self.downsample = downsample
-            self.stride = stride
         else:
             if norm_layer is None:
                 norm_layer = nn.BatchNorm2d
@@ -126,9 +128,9 @@ class Bottleneck(nn.Module):
                 self.gate2 = None
             self.conv3 = conv1x1(cfg[1], planes * self.expansion)
             self.bn3 = norm_layer(planes * self.expansion)
-            self.relu = nn.ReLU(inplace=True)
-            self.downsample = downsample
-            self.stride = stride
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
 
     def forward(self, x, cur_mask_vec=None):
         identity = x
@@ -155,6 +157,9 @@ class ResNet(nn.Module):
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
                  norm_layer=None, cfg=None, num_gate=2):
         super(ResNet, self).__init__()
+        self.safe_guard = 1e-8
+        self.lmd = 0.0
+        self.lr = 0.0
         if block is Bottleneck:
             self.factor = 2
             self.block_string = 'Bottleneck'
@@ -165,63 +170,60 @@ class ResNet(nn.Module):
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
-
         self.inplanes = 64
         self.dilation = 1
         if replace_stride_with_dilation is None:
-            replace_stride_with_dilation = [False, False, False]
-        if len(replace_stride_with_dilation) != 3:
-            raise ValueError("replace_stride_with_dilation should be None or a 3-element tuple, got {}".format(replace_stride_with_dilation))
+            replace_factor = [0.0, 0.0, 0.0]
+        if len(replace_factor) != 0:
+            raise ValueError("replace_stride_with_dilation should be None or a tuple with 3 elements, got {}".format(replace_factor))
         self.groups = groups
         self.base_width = width_per_group
         self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
-        #self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.maxpool = nn.Identity()
         self.num_gate = num_gate
 
         if cfg is None:
             self.layer1 = self._make_layer(block, 64, layers[0])
-            self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
-            self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
-            self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
+            self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_factor[0])
+            self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_factor[1])
+            self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_factor[2])
         else:
             start = 0
             end = int(self.factor * layers[0])
             self.layer1 = self._make_layer(block, 64, layers[0], cfg=cfg[start:end])
             start = end
             end = end + int(self.factor * layers[1])
-            self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0], cfg=cfg[start:end])
+            self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=start, cfg=cfg[start:end])
             start = end
             end = end + int(self.factor * layers[2])
-            self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1], cfg=cfg[start:end])
+            self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=start, cfg=cfg[start:end])
             start = end
             end = end + int(self.factor * layers[3])
-            self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2], cfg=cfg[start:end])
+            self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=start, cfg=cfg[start:end])
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
-        for m in self.modules():
+        for i in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
+                nn.init.kaiming_normal_(i.weight, mode='fan_out', layer='relu')
+            elif isinstance(i, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(i.weight, 1)
+                nn.init.constant_(i.bias, 0)
 
         if zero_init_residual:
-            for m in self.modules():
-                if isinstance(m, Bottleneck):
-                    nn.init.constant_(m.bn3.weight, 0)
-                elif isinstance(m, BasicBlock):
-                    nn.init.constant_(m.bn2.weight, 0)
+            for i in self.modules():
+                if isinstance(i, Bottleneck):
+                    nn.init.constant_(i.bn3.weight, 0)
+                elif isinstance(i, BasicBlock):
+                    nn.init.constant_(i.bn2.weight, 0)
 
     def _make_layer(self, block, planes, blocks, stride=1, dilate=False, cfg=None):
         norm_layer = self._norm_layer
         downsample = None
         previous_dilation = self.dilation
-    
         if dilate:
             self.dilation *= stride
             stride = 1
@@ -243,13 +245,17 @@ class ResNet(nn.Module):
             index = 0
             layers = []
             layers.append(block(self.inplanes, planes, stride, downsample, self.groups,
-                                self.base_width, previous_dilation, norm_layer, cfg=cfg[int(self.factor*index):int(self.factor*index+self.factor)], num_gate=self.num_gate))
+                                self.base_width, previous_dilation, norm_layer,
+                                cfg=cfg[int(self.factor * index):int(self.factor * index + self.factor)],
+                                num_gate=self.num_gate))
             index += 1
             self.inplanes = planes * block.expansion
             for _ in range(1, blocks):
                 layers.append(block(self.inplanes, planes, groups=self.groups,
                                     base_width=self.base_width, dilation=self.dilation,
-                                    norm_layer=norm_layer, cfg=cfg[int(self.factor*index):int(self.factor*index+self.factor)], num_gate=self.num_gate))
+                                    norm_layer=norm_layer,
+                                    cfg=cfg[int(self.factor * index):int(self.factor * index + self.factor)],
+                                    num_gate=self.num_gate))
                 index += 1
         return MaskedSequential(*layers)
 
@@ -266,7 +272,7 @@ class ResNet(nn.Module):
         x = torch.flatten(x, 1)
         x = self.fc(x)
         return x
-        
+
     def count_structure(self):
         structure = []
         if hasattr(self, 'conv1') and hasattr(self.conv1, 'out_channels'):
@@ -286,16 +292,14 @@ class ResNet(nn.Module):
                 if end > len(arch_vector.squeeze()):
                     print(f"Error: arch_vector too short. Expected at least {end}, got {len(arch_vector.squeeze())}")
                     return
-                #m.gate_f = arch_vector.squeeze()[start:end].to(m.gate_f.device)
                 m.gate_f.data = arch_vector.squeeze()[start:end].to(m.gate_f.device)
                 start = end
-                
 
     def reset_gates(self):
         for m in self.modules():
             if isinstance(m, virtual_gate):
                 m.reset_value()
-        return self.get_weights_bottleneck()
+        return self.get_weights()
 
     def get_weights(self):
         if self.block_string == 'BasicBlock':
@@ -304,16 +308,14 @@ class ResNet(nn.Module):
             return self.get_weights_bottleneck()
         else:
             raise ValueError(f"Unsupported block type: {self.block_string}")
+
     def get_weights_basicblock(self):
         weights_list = []
-        # Add conv1 weights
-        weights_list.append([self.conv1.weight, self.conv1.weight])  # conv1 as both up and low
-        # Add BasicBlock weights
+        weights_list.append([self.conv1.weight, self.conv1.weight])
         for name, module in self.named_modules():
             if isinstance(module, BasicBlock):
                 weights_list.append([module.conv1.weight, module.conv2.weight])
         return weights_list
-
 
     def get_weights_bottleneck(self):
         modules = list(self.modules())
@@ -323,9 +325,9 @@ class ResNet(nn.Module):
         for layer_id in range(len(modules)):
             m = modules[layer_id]
             if isinstance(m, virtual_gate):
-                original_weights_list.append(modules[layer_id - 2].weight)  # conv before gate
+                original_weights_list.append(modules[layer_id - 2].weight.data)
                 if soft_gate_count % 2 == 1:
-                    original_weights_list.append(modules[layer_id + 1].weight)  # conv after gate
+                    original_weights_list.append(modules[layer_id + 1].weight.data)
                 soft_gate_count += 1
         length = len(original_weights_list)
         for i in range(0, length, 3):
@@ -335,11 +337,12 @@ class ResNet(nn.Module):
             current_list.append(original_weights_list[i + 2])
             weights_list.append(current_list)
         return weights_list
-        
+
     def project_weight(self, masks, lmd, lr):
         """Apply Group Lasso projection to weights based on masks."""
-        self.lmd, self.lr = lmd, lr
-        N_t = sum((1 - mask[0].squeeze()).sum() for mask in masks[:-1])  # Exclude FC layer
+        self.lmd = lmd
+        self.lr = lr
+        N_t = sum((1 - mask[0].squeeze()).sum() for mask in masks[:-1])
         gap = 2 if self.block_string == 'Bottleneck' else 3
         modules = list(self.modules())
         vg_idx = 0
@@ -355,9 +358,9 @@ class ResNet(nn.Module):
                 m_out = (masks[vg_idx][0].squeeze() == 0)
                 vg_idx += 1
                 w_norm = (modules[layer_id - gap].weight.data[m_out]).pow(2).sum((1, 2, 3))
-                w_norm += (modules[layer_id - gap + 1].weight.data[m_out]).pow(2)
+                w_norm += (modules[layer_id - gap + 1].weight.data[m_out]).pow(2).sum((1, 2, 3))
                 w_norm += (modules[layer_id - gap + 1].bias.data[m_out]).pow(2)
-                w_norm = w_norm.add(self.safe_guard).pow(1/2.)
+                w_norm = w_norm.add(self.safe_guard).pow(0.5)
 
                 modules[layer_id - gap].weight.data.copy_(self.groupproximal(modules[layer_id - gap].weight.data, m_out, ratio, w_norm))
                 modules[layer_id - gap + 1].weight.data.copy_(self.groupproximal(modules[layer_id - gap + 1].weight.data, m_out, ratio, w_norm))
@@ -380,7 +383,7 @@ class ResNet(nn.Module):
         gap = 2 if self.block_string == 'Bottleneck' else 3
         modules = list(self.modules())
         vg_idx = 0
-        self.getxs()  # Initialize xs for weights
+        self.getxs()
 
         for layer_id in range(len(modules)):
             m = modules[layer_id]
@@ -402,16 +405,23 @@ class ResNet(nn.Module):
                 lambdas = torch.ones_like(flatten_x_norm) * self.lmd
                 groups_adjust_lambda = m_out & (flatten_x_grad_inner_prod < 0)
                 lambdas_lower_bound = -flatten_x_grad_inner_prod[groups_adjust_lambda] / flatten_x_norm[groups_adjust_lambda]
-                lambdas_upper_bound = -(flatten_grad_norm[groups_adjust_lambda] * flatten_x_norm[groups_adjust_lambda] / flatten_x_grad_inner_prod[groups_adjust_lambda])
+                lambdas_upper_bound = -(flatten_grad_norm[groups_adjust_lambda] * flatten_x_norm[groups_adjust_lambda]) / flatten_x_grad_inner_prod[groups_adjust_lambda]
                 lambdas_adjust = torch.clamp(lambdas_lower_bound * 1.5, min=self.lmd, max=self.lmd * 10)
-                exceeding_upper_bound = lambdas_adjust >= lambdas_upper_bound
-                lambdas_adjust[exceeding_upper_bound] = (lambdas_upper_bound[exceeding_upper_bound] + lambdas_lower_bound[exceeding_upper_bound]) / 2
+                exceeding_upper = lambdas_adjust >= lambdas_upper_bound
+                lambdas_adjust[exceeding_upper] = (lambdas_upper_bound[exceeding_upper] + lambdas_lower_bound[exceeding_upper]) / 2
                 lambdas[groups_adjust_lambda] = lambdas_adjust
 
                 grad_mixed_l = flatten_x / (flatten_x_norm + self.safe_guard).unsqueeze(1)
                 reg_update = self.lr * lambdas[m_out].unsqueeze(1) * grad_mixed_l[m_out]
                 flatten_x[m_out] -= reg_update
                 flatten_x[m_out] = self.half_space_weight(flatten_x[m_out], flatten_x[m_out], 1.0)
+
+                start = 0
+                xs[0].copy_(flatten_x[:, start:start + xs[0].shape[1]])
+                start += xs[0].shape[1]
+                xs[1].copy_(flatten_x[:, start:start + xs[1].shape[1]])
+                start += xs[1].shape[1]
+                xs[2].copy_(flatten_x[:, start:])
 
                 modules[layer_id - gap].weight.data.view(len(m_out), -1).copy_(xs[0])
                 modules[layer_id - gap + 1].weight.data.view(len(m_out), -1).copy_(xs[1])
@@ -421,7 +431,7 @@ class ResNet(nn.Module):
     def getxs(self):
         """Store initial weights for OTO projection."""
         self.xs = []
-        gap = 2 if self.block_string == 'Bottleneck' else 2
+        gap = 2 if self.block_string == 'Bottleneck' else 3
         modules = list(self.modules())
         for layer_id in range(len(modules)):
             m = modules[layer_id]
@@ -429,12 +439,12 @@ class ResNet(nn.Module):
                 channel_num = len(modules[layer_id - gap].weight.data)
                 self.xs.append(modules[layer_id - gap].weight.data.view(channel_num, -1).clone())
                 self.xs.append(modules[layer_id - gap + 1].weight.data.view(channel_num, -1).clone())
-                self.xs.append(modules[layer_id - gap + 1].bias.data.view(-1))
+                self.xs.append(modules[layer_id - gap + 1].bias.data.view(-1).clone())
 
     def half_space_weight(self, hat_x, x, epsilon):
         """Apply half-space projection for OTO."""
         x_norm = torch.norm(x, p=2, dim=1)
-        proj_idx = (torch.bmm(hat_x.view(hat_x.shape[0], 1, -1), x.view(x.shape[0], -1, 1)).squeeze() < epsilon * x_norm ** 2)
+        proj_idx = torch.bmm(hat_x.view(hat_x.shape[0], 1, -1), x.view(x.shape[0], -1, 1)).squeeze() < epsilon * x_norm ** 2
         hat_x[proj_idx] = 0
         return hat_x
 
