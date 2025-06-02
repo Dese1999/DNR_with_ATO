@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import pathlib
 import sys
-import sys
 sys.path.append('/content/DNR_with_ATO')
 from copy import deepcopy
 from torch import nn
@@ -20,6 +19,7 @@ from torchvision import transforms, datasets
 from torch.utils.data import random_split
 import wandb
 import logging
+
 import inspect
 #from utils.plot_utils import plot_accuracy, plot_loss, plot_sparsity, plot_layer_sparsity, plot_mask_overlap  
 from utils.hypernet import AC_layer,HyperStructure,SelectionBasedRegularization
@@ -52,7 +52,14 @@ def get_trainer(cfg):
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+log_file = pathlib.Path(f"{path_utils.get_checkpoint_dir()}/{cfg.name}/training_log.txt")
+    log_file.parent.mkdir(parents=True, exist_ok=True)  # create directory
 
+    # Setting the log format
+    logger = logging.getLogger(__name__)
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+    logger.addHandler(file_handler)
 def save_checkpoint(state, cfg, epochs, is_best=False, filename=None, save=True):
     if not save:
         return
@@ -82,14 +89,7 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
         "wide_resnet50_2": wide_resnet50_2,
         "wide_resnet101_2": wide_resnet101_2,
     }
-    log_file = pathlib.Path(f"{path_utils.get_checkpoint_dir()}/{cfg.name}/training_log.txt")
-    log_file.parent.mkdir(parents=True, exist_ok=True)  # create directory
-
-    # Setting the log format
-    logger = logging.getLogger(__name__)
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-    logger.addHandler(file_handler)
+    
 
     model_func = arch_mapping.get(cfg.arch.lower())
     if model_func is None:
@@ -221,7 +221,7 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
     df = pd.DataFrame(epoch_metrics)
     df["Epoch"] = range(cfg.epochs)
     df["Generation"] = generation
-    df.to_csv(log_file.parent / "metrics.csv", index=False)
+    df.to_csv(log_file.parent / f"metrics_gen{generation}.csv", index=False)
 
     return model, hyper_net, cur_mask_vec, epoch_metrics
 
@@ -237,6 +237,9 @@ def percentage_overlap(prev_mask, curr_mask, percent_flag=False):
             percent = overlap / (np.sum(curr_param_np == 1) if percent_flag and np.sum(curr_param_np == 1) > 0 else n_params)
             total_percent[name] = percent * 100
     return total_percent
+
+
+
 
 def start_KE(cfg):
     """Start the Knowledge Evolution training process."""
@@ -260,25 +263,28 @@ def start_KE(cfg):
     all_epoch_data = []
 
     for gen in range(cfg.num_generations):
-        cfg.start_epoch = 0
-        model, hyper_net, cur_mask_vec, epoch_metrics = train_dense(cfg, gen, model, hyper_net, cur_mask_vec)
-
-        weights_history["conv1"].append(model.conv1.weight.data.clone().cpu().numpy().flatten())
-        weights_history["layer1.0.conv1"].append(model.layer1.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
-        weights_history["layer2.0.conv1"].append(model.layer2.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
-        weights_history["layer3.0.conv1"].append(model.layer3.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
-        weights_history["layer4.0.conv1"].append(model.layer4.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
-        weights_history["fc"].append(model.fc.weight.data.clone().cpu().numpy().flatten())
-
-        mask_history[gen] = {}
-        if cur_mask_vec is not None:
-            masks = hyper_net.vector2mask(cur_mask_vec)
-            mask_history[gen] = {}
-            for idx, mask_sublist in enumerate(masks):
-                for sub_idx, param in enumerate(mask_sublist):
-                    name = f"layer_{idx}_mask_{sub_idx}"
-                    mask_history[gen][name] = param.data.clone().cpu().numpy()
         try:
+            cfg.start_epoch = 0
+            model, hyper_net, cur_mask_vec, epoch_metrics = train_dense(cfg, gen, model, hyper_net, cur_mask_vec)
+
+            # Store weights history
+            weights_history["conv1"].append(model.conv1.weight.data.clone().cpu().numpy().flatten())
+            weights_history["layer1.0.conv1"].append(model.layer1.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
+            weights_history["layer2.0.conv1"].append(model.layer2.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
+            weights_history["layer3.0.conv1"].append(model.layer3.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
+            weights_history["layer4.0.conv1"].append(model.layer4.layers[0].conv1.weight.data.clone().cpu().numpy().flatten())
+            weights_history["fc"].append(model.fc.weight.data.clone().cpu().numpy().flatten())
+
+            # Store mask history
+            mask_history[gen] = {}
+            if cur_mask_vec is not None:
+                masks = hyper_net.vector2mask(cur_mask_vec)
+                for idx, mask_sublist in enumerate(masks):
+                    for sub_idx, param in enumerate(mask_sublist):
+                        name = f"layer_{idx}_mask_{sub_idx}"
+                        mask_history[gen][name] = param.data.clone().cpu().numpy()
+
+            # Create DataFrame for epoch metrics
             expected_length = cfg.epochs
             for key in epoch_metrics:
                 if isinstance(epoch_metrics[key], list) and len(epoch_metrics[key]) != expected_length:
@@ -297,8 +303,8 @@ def start_KE(cfg):
                 "Mask_Update": epoch_metrics["mask_update"],
             })
             all_epoch_data.append(epoch_df)
-        except Exception as e:
-            logger.error(f"Failed to create DataFrame for generation {gen}: {e}")
+        except RuntimeError as e:
+            logger.error(f"Error in generation {gen}: {e}")
             epoch_df = pd.DataFrame({
                 "Epoch": range(cfg.epochs),
                 "Generation": [gen] * cfg.epochs,
@@ -312,22 +318,30 @@ def start_KE(cfg):
                 "Mask_Update": [False] * cfg.epochs,
             })
             all_epoch_data.append(epoch_df)
+            continue
 
-        if cfg.num_generations == 1:
-            break
-
-    try:
-        df = pd.concat(all_epoch_data, ignore_index=True)
-    except Exception as e:
-        logger.error(f"Failed to concatenate DataFrames: {e}")
+    # Save comprehensive metrics file
+    if all_epoch_data:
+        try:
+            df = pd.concat(all_epoch_data, ignore_index=True)
+            df.to_csv(base_dir / "metrics_all_generations.csv", index=False)
+        except Exception as e:
+            logger.error(f"Failed to concatenate and save DataFrames: {e}")
+            df = pd.DataFrame()
+    else:
         df = pd.DataFrame()
 
+    # Plot results if data is available
     if not df.empty and mask_history:
-        plot_accuracy(df, base_dir, cfg.set, cfg.arch)
-        plot_loss(df, base_dir, cfg.set, cfg.arch)
-        plot_sparsity(mask_history, base_dir, cfg.set, cfg.arch)
-        #plot_layer_sparsity(epoch_metrics, cfg, base_dir, cfg.set, cfg.arch)
-        plot_mask_overlap(model, mask_history, base_dir, cfg.set, cfg.arch)
+        try:
+            plot_accuracy(df, base_dir, cfg.set, cfg.arch)
+            plot_loss(df, base_dir, cfg.set, cfg.arch)
+            plot_sparsity(mask_history, base_dir, cfg.set, cfg.arch)
+            plot_mask_overlap(model, mask_history, base_dir, cfg.set, cfg.arch)
+        except Exception as e:
+            logger.error(f"Error in plotting results: {e}")
+
+    return df
 
 def clean_dir(ckpt_dir, num_epochs):
     """Clean up checkpoint directory by removing specified files."""
