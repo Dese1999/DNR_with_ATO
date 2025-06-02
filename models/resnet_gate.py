@@ -474,7 +474,6 @@ def _resnet(arch, block, layers, pretrained, progress, **kwargs):
     return model
 
 def resnet18(pretrained=False, progress=True, **kwargs):
-    kwargs['num_gate'] = 2
     return _resnet('resnet18', BasicBlock, [2, 2, 2, 2], pretrained, progress, **kwargs)
 
 def my_resnet34(pretrained=False, progress=True, **kwargs):
