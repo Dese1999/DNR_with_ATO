@@ -30,6 +30,8 @@ class Config:
         parser.add_argument(
             '--lmd', default=0.0001, type=float, metavar='W', help='group lasso lambda (default: 0.0001)',
             dest='lmd')
+        parser.add_argument(
+            '--project',type=str,default='gl')
 
         parser.add_argument(
             "--p", default=0.6, type=float, help="Target pruning rate for ATO"
