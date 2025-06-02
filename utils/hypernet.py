@@ -128,37 +128,27 @@ class HyperStructure(nn.Module):
     #         mask_list.append(item_list)
     #     return mask_list
     def vector2mask_resnet(self, inputs):
-       vector = self.transform_output(inputs)
-       print(f"Vector length: {len(vector)}, Expected: {sum(self.structure)}")
-       mask_list = []
-       start = 0
-       total_channels = sum(self.structure)
-       if len(vector) != total_channels:
-           print(f"Error: Vector length {len(vector)} != {total_channels}")
-           return []
-       for i in range(len(self.structure)):
-           item_list = []
-           out_channels = self.structure[i]
-           in_channels = 3 if i == 0 else self.structure[i-1]
-           end = start + out_channels
-           print(f"Layer {i}: start={start}, end={end}, out_channels={out_channels}")
-           if end > len(vector) or len(vector[start:end]) != out_channels:
-               print(f"Error: Invalid slice for layer {i}, got {len(vector[start:end])}, expected {out_channels}")
-               return mask_list
-           mask_output = vector[start:end].reshape(-1, 1, 1, 1)
-           ###########################
-           print(f"Layer {i}: mask_output mean = {mask_output.mean().item()}, all_ones = {torch.all(mask_output == 1).item()}")
-           mask_input = torch.ones(1, in_channels, 1, 1, device=vector.device) if i == 0 else vector[start-out_channels:start].reshape(1, -1, 1, 1)
-           item_list.append(mask_output)
-           item_list.append(mask_input)
-           mask_list.append(item_list)
-           start = end
-       fc_mask_out = torch.ones(self.num_cls, 1, 1, 1, device=vector.device)
-       fc_mask_in = torch.ones(1, self.structure[-1], 1, 1, device=vector.device)
-       mask_list.append([fc_mask_out, fc_mask_in])
-       print(f"mask_list length: {len(mask_list)}, expected: {len(self.structure) + 1}")
-       return mask_list
-        
+        vector = self.transform_output(inputs)
+        mask_list = []
+        start = 0
+        total_channels = sum(self.structure)
+        if len(inputs) != total_channels:
+            print(f"Error: Vector length {len(inputs)} != {total_channels}")
+            return []
+        for i in range(len(self.structure)):
+            out_channels = self.structure[i]
+            end = start + out_channels
+            if end > len(inputs):
+                print(f"Error: Invalid slice for layer {i}")
+                return mask_list
+            mask_output = inputs[start:end].reshape(-1, 1, 1, 1)
+            mask_input = torch.ones(1, 3, 1, 1, device=inputs.device) if i == 0 else inputs[start-out_channels:start].reshape(1, -1, 1, 1)
+            mask_list.append(mask_output)  # فقط mask_output را اضافه کنید
+            start = end
+        if len(mask_list) != len(self.structure):
+            print(f"Error: mask_list length: {len(mask_list)}, expected: {len(self.structure)}")
+        return mask_list
+            
     def vector2mask_resnetbb(self, inputs):
         vector = self.transform_output(inputs)
         mask_list = []
