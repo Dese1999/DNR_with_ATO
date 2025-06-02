@@ -87,7 +87,7 @@ class HyperStructure(nn.Module):
         out = torch.cat(outputs, dim=0)  # [sum(structure)]
         out = gumbel_softmax_sample(out, T=self.T, offset=self.base, device=device)
         if not self.training_mode:
-            out = hard_concrete(out, device=device
+            out = hard_concrete(out, device=device)
         return out
 
     # def transform_output(self, inputs):
