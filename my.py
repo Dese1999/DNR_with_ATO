@@ -53,18 +53,6 @@ def get_trainer(cfg):
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# def save_checkpoint(state, cfg, epochs, is_best=False, filename=None, save=True):
-#     """Save model checkpoint to the specified path."""
-#     if not save:
-#         return
-#     if filename is None:
-#         run_base_dir, ckpt_base_dir, _ = path_utils.get_directories(cfg, state["generation"])
-#         filename = ckpt_base_dir / f"epoch_{epochs - 1}.state"
-#     torch.save(state, filename)
-#     if is_best:
-#         best_path = ckpt_base_dir / "model_best.pth"
-#         torch.save(state, best_path)
-
 def save_checkpoint(state, cfg, epochs, is_best=False, filename=None, save=True):
     if not save:
         return
@@ -94,6 +82,14 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
         "wide_resnet50_2": wide_resnet50_2,
         "wide_resnet101_2": wide_resnet101_2,
     }
+    log_file = pathlib.Path(f"{path_utils.get_checkpoint_dir()}/{cfg.name}/training_log.txt")
+    log_file.parent.mkdir(parents=True, exist_ok=True)  # create directory
+
+    # Setting the log format
+    logger = logging.getLogger(__name__)
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+    logger.addHandler(file_handler)
 
     model_func = arch_mapping.get(cfg.arch.lower())
     if model_func is None:
@@ -114,11 +110,11 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
 
     if hyper_net is None:
         width, structure = model.count_structure()
-        print(f"Structure from count_structure: {structure}")
+        #print(f"Structure from count_structure: {structure}")
         if len(structure) != 17:
             raise ValueError(f"Expected 17 layers in structure, got {len(structure)}: {structure}")
         expected_total = sum(structure)
-        print(f"Expected total channels: {expected_total}")
+  #      print(f"Expected total channels: {expected_total}")
         hyper_net = HyperStructure(structure=structure, T=cfg.hyper_t, base=cfg.hyper_base, num_cls=cfg.num_cls, args=cfg)
         hyper_net = hyper_net.cuda()
 
@@ -184,6 +180,15 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
                     epoch_metrics["layer_sparsity"][layer] = []
                 epoch_metrics["layer_sparsity"][layer].append(sparsity)
 
+        #Logging metrics
+        log_message = (
+            f"Generation: {generation}, Epoch: {epoch}, "
+            f"Train Acc@1: {train_acc1:.2f}, Train Acc@5: {train_acc5:.2f}, Train Loss: {train_loss:.4f}, "
+            f"Test Acc@1: {test_acc1:.2f}, Test Acc@5: {test_acc5:.2f}, Test Loss: {test_loss:.4f}, "
+            f"Avg Sparsity: {avg_sparsity:.2f}, Mask Update: {(epoch + 1) % cfg.hyper_step == 0}"
+        )
+        logger.info(log_message)
+        # Store metrics in epoch_metrics
         epoch_metrics["train_acc1"].append(train_acc1)
         epoch_metrics["train_acc5"].append(train_acc5)
         epoch_metrics["train_loss"].append(train_loss)
@@ -212,6 +217,11 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
             cfg,
             epochs=cfg.epochs,
         )
+    # Save the DataFrame to a CSV file for further review    
+    df = pd.DataFrame(epoch_metrics)
+    df["Epoch"] = range(cfg.epochs)
+    df["Generation"] = generation
+    df.to_csv(log_file.parent / "metrics.csv", index=False)
 
     return model, hyper_net, cur_mask_vec, epoch_metrics
 
