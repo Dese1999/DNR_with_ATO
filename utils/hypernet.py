@@ -86,6 +86,7 @@ class HyperStructure(nn.Module):
                 raise ValueError(f"Output {i} has shape {output.shape}, expected [{self.structure[i]}]")
         out = torch.cat(outputs, dim=0)  # [sum(structure)]
         out = gumbel_softmax_sample(out, T=self.T, offset=self.base, device=device)
+        print(f"HyperStructure output mean: {out.mean().item()}, all_ones: {torch.all(out >= 0.5).item()}")
         if not self.training_mode:
             out = hard_concrete(out, device=device)
         return out
