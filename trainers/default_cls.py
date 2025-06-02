@@ -71,7 +71,7 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
             return_vect = vector.clone()
             masks = hyper_net.vector2mask(vector)
             
-            print(f"Dynamic mask generated for epoch {epoch}, vector shape: {vector.shape}")
+            #print(f"Dynamic mask generated for epoch {epoch}, vector shape: {vector.shape}")
             
     else:
         print(">>>>> Using fixed mask")
@@ -81,8 +81,6 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         ########
     for i, mask_sublist in enumerate(masks):
         active_channels = mask_sublist[0].sum().item()
-        print(f"Layer {i}: {active_channels} active channels")
-        #####
     for i, (images, target) in enumerate(train_loader):
         data_time.update(time.time() - end)
 
@@ -120,7 +118,7 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
             scheduler.step()
 
         # Apply projection (Group Lasso or OTO) for ATO
-        lmdValue = cfg.lmd  
+        lmdValue = cfg.gl_lam 
         if epoch >= cfg.start_epoch_gl:
             with torch.no_grad():
                 if cfg.project == 'gl':
@@ -134,7 +132,6 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         # Compute accuracy
         acc1, acc5 = accuracy(outputs, target, topk=(1, 5))
         losses.update(loss.item(), images.size(0))
-        #############
         alignments.update(sel_loss.item() if isinstance(sel_loss, torch.Tensor) else sel_loss, images.size(0))
         #alignments.update(sel_loss.item(), images.size(0))
         top1.update(acc1.item(), images.size(0))
@@ -157,7 +154,7 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
 
                 res_loss = 2 * cfg.resource_constraint(hyper_net.resource_output())
                 h_loss = nn.CrossEntropyLoss()(hyper_outputs, val_targets) + res_loss
-                print(f"Hyper loss: {h_loss.item()}, Res loss: {res_loss.item()}, Hyper outputs shape: {hyper_outputs.shape}")
+                #print(f"Hyper loss: {h_loss.item()}, Res loss: {res_loss.item()}, Hyper outputs shape: {hyper_outputs.shape}")
                 h_loss.backward()
                 optimizer_hyper.step()
                 if scheduler_hyper is not None:
