@@ -28,7 +28,11 @@ class Config:
             "--gl-lam", default=0.0001, type=float, help="Group Lasso coefficient for SelectionBasedRegularization"
         )
         parser.add_argument(
-            "--p", default=0.8, type=float, help="Target pruning rate for ATO"
+            '--lmd', default=0, type=float, metavar='W', help='group lasso lambda (default: 0.0001)',
+            dest='lmd')
+
+        parser.add_argument(
+            "--p", default=0.6, type=float, help="Target pruning rate for ATO"
         )
         parser.add_argument(
             "--use-fim", action="store_true", default=False, help="Use Fisher Information Matrix for pruning"
@@ -39,8 +43,10 @@ class Config:
         parser.add_argument(
             "--grad-mul", default=10.0, type=float, help="Gradient multiplier for SelectionBasedRegularization"
         )
-        parser.add_argument('--reg_w', default=4.0, type=float)  # 4.0 
-        parser.add_argument('--start_epoch_hyper', default=20, type=int)
+        parser.add_argument(
+            '--reg_w', default=4.0, type=float)  # 4.0 
+        parser.add_argument(
+            '--start_epoch_hyper', default=20, type=int)
 
         # Core training arguments
         parser.add_argument(
