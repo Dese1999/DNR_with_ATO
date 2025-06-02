@@ -128,7 +128,7 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
     # Loss and Optimizer
     criterion = nn.CrossEntropyLoss()
     params_group = net_utils.group_weight(hyper_net)
-    optimizer_hyper = torch.optim.AdamW(params_group, lr=1e-3, weight_decay=1e-2)
+    optimizer_hyper = torch.optim.AdamW(params_group, lr=1e-4, weight_decay=1e-2)
     scheduler_hyper = torch.optim.lr_scheduler.MultiStepLR(optimizer_hyper, milestones=[int(0.98 * ((cfg.epochs - 5) / 2) + 5)], gamma=0.1)
 
 
