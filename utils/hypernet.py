@@ -102,17 +102,7 @@ class HyperStructure(nn.Module):
         if inputs.dim() == 1 and len(inputs) == sum(self.structure):
             return inputs  # ا [3904]
         raise ValueError(f"Expected 1D vector of length {sum(self.structure)}, got shape {inputs.shape}")
-    # def transform_output(self, inputs):
-    #     if inputs.dim() == 1 and len(inputs) == sum(self.structure):
-    #         return inputs  # 
-    #     start = 0
-    #     arch_vector = []
-    #     for width in self.structure:
-    #         end = start + width
-    #         arch_vector.append(inputs[start:end])
-    #         start = end
-    #     return torch.cat(arch_vector)  
-        
+     
     def resource_output(self):
         device = self.bn1.weight.device
         self.inputs = self.inputs.to(device)
@@ -137,44 +127,34 @@ class HyperStructure(nn.Module):
     #         mask_list.append(item_list)
     #     return mask_list
     def vector2mask_resnet(self, inputs):
-        vector = self.transform_output(inputs)
-        mask_list = []
-        start = 0
-        total_channels = sum(self.structure)
-        if len(vector) < total_channels:
-            print(f"Error: Vector length {len(vector)} is less than required {total_channels}")
-        return []
-    
-        for i in range(len(self.structure)):
-            item_list = []
-            out_channels = self.structure[i]
-            in_channels = 3 if i == 0 else self.structure[i-1]
-            end = start + out_channels
-            if end > len(vector):
-                print(f"Error: Not enough values for layer {i}. Expected {end}, got {len(vector)}")
-                return mask_list
-            mask_output = vector[start:end].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-            if i == 0:
-                mask_input = torch.ones(1, in_channels, 1, 1, device=vector.device)
-            else:
-                prev_start = start - self.structure[i-1]
-                mask_input = vector[prev_start:start].reshape(1, -1, 1, 1)
-            item_list.append(mask_output)
-            item_list.append(mask_input)
-            mask_list.append(item_list)
-            start = end
-    
-        # add mask for fc layer
-        fc_mask_out = torch.ones(self.num_cls, 1, 1, 1, device=vector.device)
-        fc_mask_in = torch.ones(1, self.structure[-1], 1, 1, device=vector.device)
-        mask_list.append([fc_mask_out, fc_mask_in])
-        #
-        for i, item_list in enumerate(mask_list):
-            mask_output = item_list[0]
-            sparsity = 100 * (1 - mask_output.mean().item())
-            print(f"Layer {i} mask sparsity: {sparsity:.2f}%")
-    
-        return mask_list
+       vector = self.transform_output(inputs)
+       print(f"Vector length: {len(vector)}, Expected: {sum(self.structure)}")
+       mask_list = []
+       start = 0
+       total_channels = sum(self.structure)
+       if len(vector) != total_channels:
+           print(f"Error: Vector length {len(vector)} != {total_channels}")
+           return []
+       for i in range(len(self.structure)):
+           item_list = []
+           out_channels = self.structure[i]
+           in_channels = 3 if i == 0 else self.structure[i-1]
+           end = start + out_channels
+           print(f"Layer {i}: start={start}, end={end}, out_channels={out_channels}")
+           if end > len(vector) or len(vector[start:end]) != out_channels:
+               print(f"Error: Invalid slice for layer {i}, got {len(vector[start:end])}, expected {out_channels}")
+               return mask_list
+           mask_output = vector[start:end].reshape(-1, 1, 1, 1)
+           mask_input = torch.ones(1, in_channels, 1, 1, device=vector.device) if i == 0 else vector[start-out_channels:start].reshape(1, -1, 1, 1)
+           item_list.append(mask_output)
+           item_list.append(mask_input)
+           mask_list.append(item_list)
+           start = end
+       fc_mask_out = torch.ones(self.num_cls, 1, 1, 1, device=vector.device)
+       fc_mask_in = torch.ones(1, self.structure[-1], 1, 1, device=vector.device)
+       mask_list.append([fc_mask_out, fc_mask_in])
+       print(f"mask_list length: {len(mask_list)}, expected: {len(self.structure) + 1}")
+       return mask_list
         
     def vector2mask_resnetbb(self, inputs):
         vector = self.transform_output(inputs)
