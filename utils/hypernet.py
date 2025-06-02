@@ -145,6 +145,8 @@ class HyperStructure(nn.Module):
                print(f"Error: Invalid slice for layer {i}, got {len(vector[start:end])}, expected {out_channels}")
                return mask_list
            mask_output = vector[start:end].reshape(-1, 1, 1, 1)
+           ###########################
+           print(f"Layer {i}: mask_output mean = {mask_output.mean().item()}, all_ones = {torch.all(mask_output == 1).item()}")
            mask_input = torch.ones(1, in_channels, 1, 1, device=vector.device) if i == 0 else vector[start-out_channels:start].reshape(1, -1, 1, 1)
            item_list.append(mask_output)
            item_list.append(mask_input)
