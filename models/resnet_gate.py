@@ -312,7 +312,7 @@ class ResNet(nn.Module):
                 #m.gate_f = arch_vector.squeeze()[start:end].to(m.gate_f.device)
                 m.gate_f.data = arch_vector.squeeze()[start:end].to(m.gate_f.device)
                 start = end
-                print(f"Set gate {i} with width {width}, vector slice [{start-width}:{start}]")
+                
 
     def reset_gates(self):
         for m in self.modules():
