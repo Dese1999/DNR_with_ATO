@@ -276,29 +276,6 @@ class ResNet(nn.Module):
                 structure.append(module.out_channels)
         width = sum(structure) // len(structure) if structure else 0
         return width, structure
-    
-    # def count_structure(self):
-    #     structure = []
-    #     if hasattr(self, 'conv1') and hasattr(self.conv1, 'out_channels'):
-    #         structure.append(self.conv1.out_channels)
-    #         print(f"Added conv1 with width: {self.conv1.out_channels}")
-    #     for name, module in self.named_modules():
-    #         if isinstance(module, nn.Conv2d) and 'downsample' not in name and name != 'conv1':
-    #             structure.append(module.out_channels)
-    #             print(f"Found conv layer {name} with width: {module.out_channels}")
-    #     if len(structure) != 17:  
-    #         print(f"Warning: Expected 17 conv layers, got {len(structure)}")
-    #     width = sum(structure) // len(structure) if structure else 0 
-    #     return width, structure
-    # def set_vritual_gate(self, arch_vector):
-    #     i = 0
-    #     start = 0
-    #     for m in self.modules():
-    #         if isinstance(m, virtual_gate):
-    #             end = start + self.structure[i]
-    #             m.gate_f = arch_vector.squeeze()[start:end].to(m.gate_f.device)
-    #             start = end
-    #             i += 1
 
     def set_virtual_gate(self, arch_vector):
         start = 0
@@ -358,8 +335,108 @@ class ResNet(nn.Module):
             current_list.append(original_weights_list[i + 2])
             weights_list.append(current_list)
         return weights_list
+        
+    def project_weight(self, masks, lmd, lr):
+        """Apply Group Lasso projection to weights based on masks."""
+        self.lmd, self.lr = lmd, lr
+        N_t = sum((1 - mask[0].squeeze()).sum() for mask in masks[:-1])  # Exclude FC layer
+        gap = 2 if self.block_string == 'Bottleneck' else 3
+        modules = list(self.modules())
+        vg_idx = 0
 
+        for layer_id in range(len(modules)):
+            m = modules[layer_id]
+            if isinstance(m, virtual_gate):
+                ratio = (1 - masks[vg_idx][0].squeeze()).sum() / N_t if N_t > 0 else 0
+                if ratio == 0:
+                    vg_idx += 1
+                    continue
 
+                m_out = (masks[vg_idx][0].squeeze() == 0)
+                vg_idx += 1
+                w_norm = (modules[layer_id - gap].weight.data[m_out]).pow(2).sum((1, 2, 3))
+                w_norm += (modules[layer_id - gap + 1].weight.data[m_out]).pow(2)
+                w_norm += (modules[layer_id - gap + 1].bias.data[m_out]).pow(2)
+                w_norm = w_norm.add(self.safe_guard).pow(1/2.)
+
+                modules[layer_id - gap].weight.data.copy_(self.groupproximal(modules[layer_id - gap].weight.data, m_out, ratio, w_norm))
+                modules[layer_id - gap + 1].weight.data.copy_(self.groupproximal(modules[layer_id - gap + 1].weight.data, m_out, ratio, w_norm))
+                modules[layer_id - gap + 1].bias.data.copy_(self.groupproximal(modules[layer_id - gap + 1].bias.data, m_out, ratio, w_norm))
+
+    def groupproximal(self, weight, m_out, ratio, w_norm):
+        """Apply proximal operator for Group Lasso."""
+        with torch.no_grad():
+            dimlen = len(weight.shape)
+            w_norm_expanded = w_norm
+            while dimlen > 1:
+                w_norm_expanded = w_norm_expanded.unsqueeze(-1)
+                dimlen -= 1
+            factor = torch.clamp(1 - (self.lmd * ratio * self.lr) / w_norm_expanded, min=0)
+            weight[m_out] *= factor
+        return weight
+
+    def oto(self, masks):
+        """Apply OTO projection for ATO."""
+        gap = 2 if self.block_string == 'Bottleneck' else 3
+        modules = list(self.modules())
+        vg_idx = 0
+        self.getxs()  # Initialize xs for weights
+
+        for layer_id in range(len(modules)):
+            m = modules[layer_id]
+            if isinstance(m, virtual_gate):
+                m_out = (masks[vg_idx][0].squeeze() != 0)
+                xs = [self.xs[3 * vg_idx], self.xs[3 * vg_idx + 1], self.xs[3 * vg_idx + 2]]
+                grads = [
+                    (xs[0] - modules[layer_id - gap].weight.grad.data.view(len(m_out), -1)) / self.lr if modules[layer_id - gap].weight.grad is not None else torch.zeros_like(xs[0]),
+                    (xs[1] - modules[layer_id - gap + 1].weight.grad.data.view(len(m_out), -1)) / self.lr if modules[layer_id - gap + 1].weight.grad is not None else torch.zeros_like(xs[1]),
+                    (xs[2] - modules[layer_id - gap + 1].bias.grad.data.view(len(m_out), -1)) / self.lr if modules[layer_id - gap + 1].bias.grad is not None else torch.zeros_like(xs[2])
+                ]
+                flatten_x = torch.cat(xs, dim=1)
+                flatten_grad = torch.cat(grads, dim=1)
+
+                flatten_grad_norm = torch.norm(flatten_grad, p=2, dim=1)
+                flatten_x_norm = torch.norm(flatten_x, p=2, dim=1)
+                flatten_x_grad_inner_prod = torch.sum(flatten_x * flatten_grad, dim=1)
+
+                lambdas = torch.ones_like(flatten_x_norm) * self.lmd
+                groups_adjust_lambda = m_out & (flatten_x_grad_inner_prod < 0)
+                lambdas_lower_bound = -flatten_x_grad_inner_prod[groups_adjust_lambda] / flatten_x_norm[groups_adjust_lambda]
+                lambdas_upper_bound = -(flatten_grad_norm[groups_adjust_lambda] * flatten_x_norm[groups_adjust_lambda] / flatten_x_grad_inner_prod[groups_adjust_lambda])
+                lambdas_adjust = torch.clamp(lambdas_lower_bound * 1.5, min=self.lmd, max=self.lmd * 10)
+                exceeding_upper_bound = lambdas_adjust >= lambdas_upper_bound
+                lambdas_adjust[exceeding_upper_bound] = (lambdas_upper_bound[exceeding_upper_bound] + lambdas_lower_bound[exceeding_upper_bound]) / 2
+                lambdas[groups_adjust_lambda] = lambdas_adjust
+
+                grad_mixed_l = flatten_x / (flatten_x_norm + self.safe_guard).unsqueeze(1)
+                reg_update = self.lr * lambdas[m_out].unsqueeze(1) * grad_mixed_l[m_out]
+                flatten_x[m_out] -= reg_update
+                flatten_x[m_out] = self.half_space_weight(flatten_x[m_out], flatten_x[m_out], 1.0)
+
+                modules[layer_id - gap].weight.data.view(len(m_out), -1).copy_(xs[0])
+                modules[layer_id - gap + 1].weight.data.view(len(m_out), -1).copy_(xs[1])
+                modules[layer_id - gap + 1].bias.data.view(len(m_out), -1).copy_(xs[2])
+                vg_idx += 1
+
+    def getxs(self):
+        """Store initial weights for OTO projection."""
+        self.xs = []
+        gap = 2 if self.block_string == 'Bottleneck' else 2
+        modules = list(self.modules())
+        for layer_id in range(len(modules)):
+            m = modules[layer_id]
+            if isinstance(m, virtual_gate):
+                channel_num = len(modules[layer_id - gap].weight.data)
+                self.xs.append(modules[layer_id - gap].weight.data.view(channel_num, -1).clone())
+                self.xs.append(modules[layer_id - gap + 1].weight.data.view(channel_num, -1).clone())
+                self.xs.append(modules[layer_id - gap + 1].bias.data.view(-1))
+
+    def half_space_weight(self, hat_x, x, epsilon):
+        """Apply half-space projection for OTO."""
+        x_norm = torch.norm(x, p=2, dim=1)
+        proj_idx = (torch.bmm(hat_x.view(hat_x.shape[0], 1, -1), x.view(x.shape[0], -1, 1)).squeeze() < epsilon * x_norm ** 2)
+        hat_x[proj_idx] = 0
+        return hat_x
 
 def _resnet(arch, block, layers, pretrained, progress, **kwargs):
     model = ResNet(block, layers, **kwargs)
