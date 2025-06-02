@@ -348,35 +348,42 @@ class ResNet(nn.Module):
         return weights_list
 
     def project_weight(self, masks, lmd, lr):
-        """Apply Group Lasso projection to weights based on masks."""
         self.lmd = lmd
         self.lr = lr
-        N_t = sum((1 - mask[0].mean()).item() for mask in masks[:-1])
-        #N_t = sum((1 - mask[0].squeeze()).sum() for mask in masks[:-1])
-        gap = 2 if self.block_string == 'Bottleneck' else 3
+        N_t = 0
+        for mask_sublist in masks[:-1]:
+            if not isinstance(mask_sublist, (list, tuple)) or len(mask_sublist) != 2:
+                print(f"Error: Invalid mask format: {mask_sublist}")
+                return
+            mask_output, _ = mask_sublist
+            mean_val = mask_output.mean().item()
+            N_t += (1 - mean_val)
+            if mean_val >= 0.999:
+                print(f"Warning: Mask mean is {mean_val}, close to 1")
+        if N_t == 0:
+            print("Warning: N_t is zero, skipping")
+            return
+        gap = 3 if self.block_string == 'BasicBlock' else 2
         modules = list(self.modules())
         vg_idx = 0
-
         for layer_id in range(len(modules)):
             m = modules[layer_id]
             if isinstance(m, virtual_gate):
-                #ratio = (1 - masks[vg_idx][0].squeeze()).sum() / N_t if N_t > 0 else 0
-                ratio = (1 - masks[vg_idx][0].mean()).item() / N_t if N_t > 0 else 0
+                mask_output, _ = masks[vg_idx]
+                mean_val = mask_output.mean().item()
+                ratio = (1 - mean_val) / N_t if N_t > 0 else 0
                 if ratio == 0:
                     vg_idx += 1
                     continue
-                m_out = (masks[vg_idx][0] == 0)
-                #m_out = (masks[vg_idx][0].squeeze() == 0)
-                vg_idx += 1
+                m_out = (mask_output == 0)
                 w_norm = (modules[layer_id - gap].weight.data[m_out]).pow(2).sum((1, 2, 3))
                 w_norm += (modules[layer_id - gap + 1].weight.data[m_out]).pow(2).sum((1, 2, 3))
-                w_norm += (modules[layer_id - gap + 1].bias.data[m_out]).pow(2)
+                w_norm += (modules[layer_id - gap + 1].bias.data[m_out.squeeze()]).pow(2)
                 w_norm = w_norm.add(self.safe_guard).pow(0.5)
-
                 modules[layer_id - gap].weight.data.copy_(self.groupproximal(modules[layer_id - gap].weight.data, m_out, ratio, w_norm))
                 modules[layer_id - gap + 1].weight.data.copy_(self.groupproximal(modules[layer_id - gap + 1].weight.data, m_out, ratio, w_norm))
-                modules[layer_id - gap + 1].bias.data.copy_(self.groupproximal(modules[layer_id - gap + 1].bias.data, m_out, ratio, w_norm))
-
+                modules[layer_id - gap + 1].bias.data.copy_(self.groupproximal(modules[layer_id - gap + 1].bias.data, m_out.squeeze(), ratio, w_norm))
+                vg_idx += 1
     def groupproximal(self, weight, m_out, ratio, w_norm):
         """Apply proximal operator for Group Lasso."""
         with torch.no_grad():
