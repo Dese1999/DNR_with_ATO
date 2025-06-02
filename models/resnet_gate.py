@@ -166,16 +166,16 @@ class ResNet(nn.Module):
         elif block is BasicBlock:
             self.factor = 1
             self.block_string = 'BasicBlock'
-
+    
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
         self.inplanes = 64
         self.dilation = 1
         if replace_stride_with_dilation is None:
-            replace_factor = [0.0, 0.0, 0.0]
-        if len(replace_factor) != 0:
-            raise ValueError("replace_stride_with_dilation should be None or a tuple with 3 elements, got {}".format(replace_factor))
+            replace_stride_with_dilation = [False, False, False]
+        if not isinstance(replace_stride_with_dilation, (list, tuple)) or len(replace_stride_with_dilation) != 3:
+            raise ValueError("replace_stride_with_dilation should be None or a list/tuple with 3 elements, got {}".format(replace_stride_with_dilation))
         self.groups = groups
         self.base_width = width_per_group
         self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
@@ -183,42 +183,42 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.Identity()
         self.num_gate = num_gate
-
+    
         if cfg is None:
             self.layer1 = self._make_layer(block, 64, layers[0])
-            self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_factor[0])
-            self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_factor[1])
-            self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_factor[2])
+            self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
+            self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
+            self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
         else:
             start = 0
             end = int(self.factor * layers[0])
             self.layer1 = self._make_layer(block, 64, layers[0], cfg=cfg[start:end])
             start = end
             end = end + int(self.factor * layers[1])
-            self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=start, cfg=cfg[start:end])
+            self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0], cfg=cfg[start:end])
             start = end
             end = end + int(self.factor * layers[2])
-            self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=start, cfg=cfg[start:end])
+            self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1], cfg=cfg[start:end])
             start = end
             end = end + int(self.factor * layers[3])
-            self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=start, cfg=cfg[start:end])
-
+            self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2], cfg=cfg[start:end])
+    
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
-
-        for i in self.modules():
+    
+        for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(i.weight, mode='fan_out', layer='relu')
-            elif isinstance(i, (nn.BatchNorm2d, nn.GroupNorm)):
-                nn.init.constant_(i.weight, 1)
-                nn.init.constant_(i.bias, 0)
-
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+    
         if zero_init_residual:
-            for i in self.modules():
-                if isinstance(i, Bottleneck):
-                    nn.init.constant_(i.bn3.weight, 0)
-                elif isinstance(i, BasicBlock):
-                    nn.init.constant_(i.bn2.weight, 0)
+            for m in self.modules():
+                if isinstance(m, Bottleneck):
+                    nn.init.constant_(m.bn3.weight, 0)
+                elif isinstance(m, BasicBlock):
+                    nn.init.constant_(m.bn2.weight, 0)
 
     def _make_layer(self, block, planes, blocks, stride=1, dilate=False, cfg=None):
         norm_layer = self._norm_layer
