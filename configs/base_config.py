@@ -28,7 +28,7 @@ class Config:
             "--gl-lam", default=0.0001, type=float, help="Group Lasso coefficient for SelectionBasedRegularization"
         )
         parser.add_argument(
-            '--lmd', default=0, type=float, metavar='W', help='group lasso lambda (default: 0.0001)',
+            '--lmd', default=0.0001, type=float, metavar='W', help='group lasso lambda (default: 0.0001)',
             dest='lmd')
 
         parser.add_argument(
