@@ -69,6 +69,9 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
             hyper_net.eval()
             vector = hyper_net()
             return_vect = vector.clone()
+            ##############################3
+            print(f"cur_mask_vec mean: {cur_mask_vec.mean().item()}, min: {cur_mask_vec.min().item()}, max: {cur_mask_vec.max().item()}")
+
             masks = hyper_net.vector2mask(vector)
             
             #print(f"Dynamic mask generated for epoch {epoch}, vector shape: {vector.shape}")
@@ -116,7 +119,6 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         optimizer.step()
         if scheduler is not None:
             scheduler.step()
-        print(f"cur_mask_vec mean: {cur_mask_vec.mean().item()}, min: {cur_mask_vec.min().item()}, max: {cur_mask_vec.max().item()}")
         # Apply projection (Group Lasso or OTO) for ATO
         lmdValue = cfg.gl_lam 
         if epoch >= cfg.start_epoch_gl:
