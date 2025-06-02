@@ -91,18 +91,18 @@ class HyperStructure(nn.Module):
             out = hard_concrete(out, device=device)
         return out
 
-    # def transform_output(self, inputs):
-    #     arch_vector = []
-    #     start = 0
-    #     for i in range(len(self.structure)):
-    #         end = start + self.structure[i]
-    #         arch_vector.append(inputs[start:end])
-    #         start = end
-    #     return arch_vector
     def transform_output(self, inputs):
-        if inputs.dim() == 1 and len(inputs) == sum(self.structure):
-            return inputs  # ا [3904]
-        raise ValueError(f"Expected 1D vector of length {sum(self.structure)}, got shape {inputs.shape}")
+        arch_vector = []
+        start = 0
+        for i in range(len(self.structure)):
+            end = start + self.structure[i]
+            arch_vector.append(inputs[start:end])
+            start = end
+        return arch_vector
+    # def transform_output(self, inputs):
+    #     if inputs.dim() == 1 and len(inputs) == sum(self.structure):
+    #         return inputs  # ا [3904]
+    #     raise ValueError(f"Expected 1D vector of length {sum(self.structure)}, got shape {inputs.shape}")
      
     def resource_output(self):
         device = self.bn1.weight.device
@@ -130,25 +130,19 @@ class HyperStructure(nn.Module):
     def vector2mask_resnet(self, inputs):
         vector = self.transform_output(inputs)
         mask_list = []
-        start = 0
-        total_channels = sum(self.structure)
-        if len(inputs) != total_channels:
-            print(f"Error: Vector length {len(inputs)} != {total_channels}")
+        if len(vector) != len(self.structure):
+            print(f"Error: Expected {len(self.structure)} vectors, got {len(vector)}")
             return []
         for i in range(len(self.structure)):
-            out_channels = self.structure[i]
-            end = start + out_channels
-            if end > len(inputs):
-                print(f"Error: Invalid slice for layer {i}")
+            if vector[i].numel() == 0:
+                print(f"Error: Layer {i} has empty vector")
                 return mask_list
-            mask_output = inputs[start:end].reshape(-1, 1, 1, 1)
-            mask_input = torch.ones(1, 3, 1, 1, device=inputs.device) if i == 0 else inputs[start-out_channels:start].reshape(1, -1, 1, 1)
-            mask_list.append(mask_output)  # فقط mask_output را اضافه کنید
-            start = end
+            mask_output = vector[i].reshape(-1, 1, 1, 1)
+            mask_list.append(mask_output)
         if len(mask_list) != len(self.structure):
             print(f"Error: mask_list length: {len(mask_list)}, expected: {len(self.structure)}")
         return mask_list
-            
+                
     def vector2mask_resnetbb(self, inputs):
         vector = self.transform_output(inputs)
         mask_list = []
