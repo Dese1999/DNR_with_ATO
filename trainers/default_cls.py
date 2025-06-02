@@ -106,12 +106,10 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         # Compute selection loss for ATO
         weights = model.get_weights()
         with torch.no_grad():
-            #print("Weights length:", len(weights) if weights else 0)
-            #print("Masks length:", len(masks) if masks else 0)
+           
             sel_loss = cfg.selection_reg(weights, masks) if hasattr(cfg, 'selection_reg') else 0.0
             if hasattr(cfg, 'selection_reg') and weights and masks:
                 sel_loss = cfg.selection_reg(weights, masks)
-                #print(f"sel_loss: {sel_loss}, type: {type(sel_loss)}, weights_len: {len(weights)}, masks_len: {len(masks)}")
             else:
                 sel_loss = torch.tensor(0.0, device='cuda')
         loss += sel_loss
@@ -144,7 +142,6 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         acc1, acc5 = accuracy(outputs, target, topk=(1, 5))
         losses.update(loss.item(), images.size(0))
         #############
-        #print(type(sel_loss), sel_loss)
         alignments.update(sel_loss.item() if isinstance(sel_loss, torch.Tensor) else sel_loss, images.size(0))
         #alignments.update(sel_loss.item(), images.size(0))
         top1.update(acc1.item(), images.size(0))
@@ -154,13 +151,9 @@ def soft_train(train_loader, model, hyper_net, criterion, valid_loader, optimize
         if epoch >= cfg.start_epoch_hyper and (epoch < int((cfg.epochs - 5) / 2) + 5):
             if (i + 1) % cfg.hyper_step == 0:
                 val_inputs, val_targets = next(iter(valid_loader))
-                print(f"val_inputs shape: {val_inputs.shape}, dtype: {val_inputs.dtype}, device: {val_inputs.device}")
-                print(f"val_targets shape: {val_targets.shape}, dtype: {val_targets.dtype}, device: {val_targets.device}, min: {val_targets.min().item()}, max: {val_targets.max().item()}")
-                
+              
                 val_inputs = val_inputs.cuda()
                 val_targets = val_targets.long().squeeze().cuda()
-                #########
-                print(f"val_inputs device: {val_inputs.device}, val_targets device: {val_targets.device}")
                 optimizer_hyper.zero_grad()
 
                 # Compute hyper_net loss with resource constraint (DNR)
