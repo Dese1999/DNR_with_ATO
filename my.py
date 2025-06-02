@@ -108,7 +108,7 @@ def train_dense(cfg, generation, model=None, hyper_net=None, cur_mask_vec=None):
 
     if hyper_net is None:
         width, structure = model.count_structure()
-        #print(f"Structure from count_structure: {structure}")
+        print(f"Structure from count_structure: {structure}")
         if len(structure) != 17:
             raise ValueError(f"Expected 17 layers in structure, got {len(structure)}: {structure}")
         expected_total = sum(structure)
