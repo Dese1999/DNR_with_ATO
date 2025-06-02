@@ -141,9 +141,9 @@ class HyperStructure(nn.Module):
         mask_list = []
         start = 0
         total_channels = sum(self.structure)
-        if len(vector) != total_channels:
+        if len(vector) < total_channels:
             print(f"Error: Vector length {len(vector)} is less than required {total_channels}")
-            return []
+        return []
     
         for i in range(len(self.structure)):
             item_list = []
@@ -158,16 +158,17 @@ class HyperStructure(nn.Module):
                 mask_input = torch.ones(1, in_channels, 1, 1, device=vector.device)
             else:
                 prev_start = start - self.structure[i-1]
-                mask_input = vector[prev_start:start].unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+                mask_input = vector[prev_start:start].reshape(1, -1, 1, 1)
             item_list.append(mask_output)
             item_list.append(mask_input)
             mask_list.append(item_list)
             start = end
     
         # add mask for fc layer
-        fc_mask_out = torch.ones(self.num_cls, device=vector.device).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+        fc_mask_out = torch.ones(self.num_cls, 1, 1, 1, device=vector.device)
         fc_mask_in = torch.ones(1, self.structure[-1], 1, 1, device=vector.device)
         mask_list.append([fc_mask_out, fc_mask_in])
+        #
         for i, item_list in enumerate(mask_list):
             mask_output = item_list[0]
             sparsity = 100 * (1 - mask_output.mean().item())
