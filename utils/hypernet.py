@@ -128,19 +128,22 @@ class HyperStructure(nn.Module):
     #         mask_list.append(item_list)
     #     return mask_list
     def vector2mask_resnet(self, inputs):
+        if inputs.dim() != 1 or len(inputs) != sum(self.structure):
+            print(f"Error: Expected 1D vector of length {sum(self.structure)}, got shape {inputs.shape}")
+            return []
         vector = self.transform_output(inputs)
         mask_list = []
         if len(vector) != len(self.structure):
             print(f"Error: Expected {len(self.structure)} vectors, got {len(vector)}")
             return []
         for i in range(len(self.structure)):
-            if vector[i].numel() == 0:
-                print(f"Error: Layer {i} has empty vector")
+            if vector[i].numel() == 0 or vector[i].shape[0] != self.structure[i]:
+                print(f"Error: Layer {i} vector has shape {vector[i].shape}, expected [{self.structure[i]}]")
                 return mask_list
             mask_output = vector[i].reshape(-1, 1, 1, 1)
-            mask_list.append(mask_output)
-        if len(mask_list) != len(self.structure):
-            print(f"Error: mask_list length: {len(mask_list)}, expected: {len(self.structure)}")
+            in_channels = 3 if i == 0 else self.structure[i-1]
+            mask_input = torch.ones(1, in_channels, 1, 1, device=inputs.device) if i == 0 else vector[i-1].reshape(1, 1, 1, 1)
+            mask_list.append([mask_output, mask_input])
         return mask_list
                 
     def vector2mask_resnetbb(self, inputs):
