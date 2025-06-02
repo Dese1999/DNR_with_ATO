@@ -277,10 +277,19 @@ class ResNet(nn.Module):
         structure = []
         if hasattr(self, 'conv1') and hasattr(self.conv1, 'out_channels'):
             structure.append(self.conv1.out_channels)
+        else:
+            raise ValueError("Model does not have conv1 with out_channels")
+    
         for name, module in self.named_modules():
             if isinstance(module, nn.Conv2d) and 'downsample' not in name and name != 'conv1':
+                if not hasattr(module, 'out_channels') or module.out_channels <= 0:
+                    raise ValueError(f"Invalid out_channels in layer {name}")
                 structure.append(module.out_channels)
-        width = sum(structure) // len(structure) if structure else 0
+    
+        if not structure:
+            raise ValueError("No valid convolutional layers found in the model")
+    
+        width = sum(structure) // len(structure)
         return width, structure
 
     def set_virtual_gate(self, arch_vector):
