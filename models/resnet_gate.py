@@ -351,7 +351,8 @@ class ResNet(nn.Module):
         for layer_id in range(len(modules)):
             m = modules[layer_id]
             if isinstance(m, virtual_gate):
-                ratio = (1 - masks[vg_idx][0].squeeze()).sum() / N_t if N_t > 0 else 0
+                #ratio = (1 - masks[vg_idx][0].squeeze()).sum() / N_t if N_t > 0 else 0
+                ratio = (1 - masks[vg_idx][0].mean()).item() / N_t if N_t > 0 else 0
                 if ratio == 0:
                     vg_idx += 1
                     continue
